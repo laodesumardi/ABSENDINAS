@@ -58,14 +58,14 @@
 <div class="container login-wrapper d-flex justify-content-center align-items-center">
     <div class="login-card w-100" style="max-width: 380px;">
 
-        <div class="text-center mb-4">
-            <i class="fas fa-user-circle fa-2x mb-2 text-primary"></i>
+        <div class="mb-4 text-center">
+            <i class="mb-2 fas fa-user-circle fa-2x text-primary"></i>
             <div class="login-title">Sistem Absensi</div>
             <div class="login-subtitle">Silakan masuk ke akun Anda</div>
         </div>
 
         @if ($errors->any())
-            <div class="alert alert-danger py-2">
+            <div class="py-2 alert alert-danger">
                 <ul class="mb-0 small">
                     @foreach ($errors->all() as $error)
                         <li>{{ $error }}</li>
@@ -99,9 +99,11 @@
                 <label class="form-check-label" for="remember">Ingat saya</label>
             </div>
 
-            <button type="submit" class="btn btn-login w-100">
-                Login
-            </button>
+           <button type="submit"
+    class="py-2 text-white btn w-100 rounded-3"
+    style="background-color: #3a0ca3;">
+    Login
+</button>
         </form>
 
     </div>

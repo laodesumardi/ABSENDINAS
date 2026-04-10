@@ -398,6 +398,25 @@
             }
         }
 
+        .btn-login {
+    background-color: #3a0ca3;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    transition: 0.2s ease;
+}
+
+.btn-login:hover {
+    background-color: #2f0a86;
+}
+
+.btn-login:focus {
+    box-shadow: 0 0 0 0.2rem rgba(58, 12, 163, 0.25);
+}
+
         /* Animations */
         @keyframes fadeInUp {
             from {
