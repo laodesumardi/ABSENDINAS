@@ -116,6 +116,10 @@ class AttendanceController extends Controller
     /**
      * Check if user can check in
      */
+
+
+
+
     private function canCheckIn($schedule, $todayAttendance)
     {
         // Jika sudah check in hari ini
@@ -167,99 +171,7 @@ class AttendanceController extends Controller
     /**
      * Process check in
      */
-    public function checkIn(Request $request)
-    {
-        // Check if already checked in today
-        $existingAttendance = Attendance::where('user_id', Auth::id())
-            ->whereDate('attendance_date', today())
-            ->first();
-
-        if ($existingAttendance) {
-            return redirect()->back()->with('error', 'Anda sudah melakukan check in hari ini.');
-        }
-
-        // Check if today is holiday
-        if (Holiday::isHoliday(today())) {
-            return redirect()->back()->with('error', 'Hari ini adalah hari libur, tidak perlu check in.');
-        }
-
-        $validator = Validator::make($request->all(), [
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
-            'photo' => 'nullable|image|max:2048|mimes:jpg,jpeg,png',
-            'notes' => 'nullable|string|max:500',
-        ]);
-
-        if ($validator->fails()) {
-            return redirect()->back()->withErrors($validator)->withInput();
-        }
-
-        // Validate location
-        $workLocation = WorkLocation::where('is_active', true)->first();
-        if (!$workLocation) {
-            return redirect()->back()->with('error', 'Lokasi kerja belum dikonfigurasi. Silakan hubungi admin.');
-        }
-
-        $isValidLocation = $workLocation->isWithinRadius(
-            $request->latitude,
-            $request->longitude
-        );
-
-        if (!$isValidLocation) {
-            $distance = $workLocation->calculateDistance(
-                $request->latitude,
-                $request->longitude,
-                $workLocation->latitude,
-                $workLocation->longitude
-            );
-            return redirect()->back()->with('error', "Anda berada di luar radius kantor. Jarak: " . round($distance) . " meter (Maksimal: {$workLocation->radius} meter)");
-        }
-
-        // Get schedule and check if late
-        $schedule = WorkSchedule::getTodaySchedule();
-        $checkInTime = now();
-        $isLate = false;
-        $lateMinutes = 0;
-
-        if ($schedule && $schedule->is_working_day) {
-            $checkInEnd = Carbon::parse($schedule->check_in_end);
-            if ($checkInTime > $checkInEnd) {
-                $isLate = true;
-                $lateMinutes = $checkInTime->diffInMinutes($checkInEnd);
-            }
-        }
-
-        // Handle photo upload
-        $photoPath = null;
-        if ($request->hasFile('photo')) {
-            $photoPath = $request->file('photo')->store('attendance-photos/' . date('Y/m'), 'public');
-        }
-
-        $attendance = Attendance::create([
-            'user_id' => Auth::id(),
-            'attendance_date' => today(),
-            'check_in_time' => $checkInTime->format('H:i:s'),
-            'check_in_latitude' => $request->latitude,
-            'check_in_longitude' => $request->longitude,
-            'check_in_photo' => $photoPath,
-            'status' => $isLate ? 'late' : 'present',
-            'late_minutes' => $lateMinutes,
-            'notes' => $request->notes,
-        ]);
-
-        // Log activity
-        ActivityLog::create([
-            'user_id' => Auth::id(),
-            'action' => 'check_in',
-            'description' => "Check in pada " . $checkInTime->format('H:i:s') . ($isLate ? " (Terlambat {$lateMinutes} menit)" : " (Tepat waktu)"),
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
-
-        $message = $isLate ? "Check in berhasil! (Terlambat {$lateMinutes} menit)" : "Check in berhasil! Selamat bekerja.";
-
-        return redirect()->route('employee.attendance.index')->with('success', $message);
-    }
+    checkIn
 
     /**
      * Process check out

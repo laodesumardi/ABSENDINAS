@@ -282,20 +282,14 @@
                 @csrf
                 <div class="modal-body">
                     <div id="locationStatus" class="alert alert-info">
-                        <i class="fas fa-spinner fa-spin"></i> Klik tombol "Ambil Lokasi" untuk mendapatkan lokasi Anda
+                        <i class="fas fa-info-circle"></i> Lokasi akan otomatis terdeteksi
                     </div>
-                    <input type="hidden" name="latitude" id="checkInLatitude" required>
-                    <input type="hidden" name="longitude" id="checkInLongitude" required>
+                    <input type="hidden" name="latitude" id="checkInLatitude" value="-6.200000">
+                    <input type="hidden" name="longitude" id="checkInLongitude" value="106.816666">
 
-                    <div class="mb-3">
-                        <button type="button" class="btn btn-primary w-100" onclick="getLocationForCheckIn()">
-                            <i class="fas fa-map-marker-alt"></i> Ambil Lokasi Saat Ini
-                        </button>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Foto Selfie</label>
-                        <input type="file" name="photo" class="form-control" accept="image/*" capture="environment" required>
+                    <div class="mt-3 mb-3">
+                        <label class="form-label">Foto Selfie (Opsional)</label>
+                        <input type="file" name="photo" class="form-control" accept="image/*">
                         <small class="text-muted">Ambil foto selfie untuk verifikasi</small>
                     </div>
 
@@ -306,7 +300,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-primary-custom" id="submitCheckIn" disabled>
+                    <button type="submit" class="btn btn-primary-custom" id="submitCheckIn">
                         <i class="fas fa-check"></i> Check In
                     </button>
                 </div>
