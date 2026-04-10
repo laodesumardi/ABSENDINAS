@@ -281,11 +281,20 @@
             <form action="{{ route('employee.attendance.check-in') }}" method="POST" enctype="multipart/form-data" id="checkInForm">
                 @csrf
                 <div class="modal-body">
-                    <div id="locationStatus" class="alert alert-info">
-                        <i class="fas fa-info-circle"></i> Lokasi akan otomatis terdeteksi
+                    <!-- Tombol Ambil Lokasi -->
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-primary w-100" id="getLocationBtn" onclick="getCurrentLocation()">
+                            <i class="fas fa-map-marker-alt"></i> Ambil Lokasi Saat Ini
+                        </button>
                     </div>
-                    <input type="hidden" name="latitude" id="checkInLatitude" value="-6.200000">
-                    <input type="hidden" name="longitude" id="checkInLongitude" value="106.816666">
+
+                    <!-- Status Lokasi -->
+                    <div id="locationStatus" class="alert alert-secondary" style="display: none;">
+                        <i class="fas fa-info-circle"></i> <span id="locationText">Klik tombol di atas untuk mengambil lokasi</span>
+                    </div>
+
+                    <input type="hidden" name="latitude" id="checkInLatitude" required>
+                    <input type="hidden" name="longitude" id="checkInLongitude" required>
 
                     <div class="mt-3 mb-3">
                         <label class="form-label">Foto Selfie (Opsional)</label>
@@ -300,7 +309,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-primary-custom" id="submitCheckIn">
+                    <button type="submit" class="btn btn-primary-custom" id="submitCheckIn" disabled>
                         <i class="fas fa-check"></i> Check In
                     </button>
                 </div>
@@ -322,21 +331,24 @@
             <form action="{{ route('employee.attendance.check-out') }}" method="POST" enctype="multipart/form-data" id="checkOutForm">
                 @csrf
                 <div class="modal-body">
-                    <div id="locationStatusOut" class="alert alert-info">
-                        <i class="fas fa-spinner fa-spin"></i> Klik tombol "Ambil Lokasi" untuk mendapatkan lokasi Anda
-                    </div>
-                    <input type="hidden" name="latitude" id="checkOutLatitude" required>
-                    <input type="hidden" name="longitude" id="checkOutLongitude" required>
-
+                    <!-- Tombol Ambil Lokasi -->
                     <div class="mb-3">
-                        <button type="button" class="btn btn-primary w-100" onclick="getLocationForCheckOut()">
+                        <button type="button" class="btn btn-primary w-100" id="getLocationOutBtn" onclick="getCurrentLocationForCheckOut()">
                             <i class="fas fa-map-marker-alt"></i> Ambil Lokasi Saat Ini
                         </button>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Foto Selfie</label>
-                        <input type="file" name="photo" class="form-control" accept="image/*" capture="environment" required>
+                    <!-- Status Lokasi -->
+                    <div id="locationStatusOut" class="alert alert-secondary" style="display: none;">
+                        <i class="fas fa-info-circle"></i> <span id="locationTextOut">Klik tombol di atas untuk mengambil lokasi</span>
+                    </div>
+
+                    <input type="hidden" name="latitude" id="checkOutLatitude" required>
+                    <input type="hidden" name="longitude" id="checkOutLongitude" required>
+
+                    <div class="mt-3 mb-3">
+                        <label class="form-label">Foto Selfie (Opsional)</label>
+                        <input type="file" name="photo" class="form-control" accept="image/*">
                         <small class="text-muted">Ambil foto selfie untuk verifikasi</small>
                     </div>
                 </div>
@@ -369,26 +381,27 @@
 
 @push('scripts')
 <script>
-// Variabel global
-let checkInLatitude = null;
-let checkInLongitude = null;
-let checkOutLatitude = null;
-let checkOutLongitude = null;
-
-// Fungsi untuk mendapatkan lokasi check in
-function getLocationForCheckIn() {
+// Fungsi untuk mengambil lokasi check in
+function getCurrentLocation() {
     const locationStatus = document.getElementById('locationStatus');
+    const locationText = document.getElementById('locationText');
     const submitBtn = document.getElementById('submitCheckIn');
+    const getLocationBtn = document.getElementById('getLocationBtn');
 
     if (!navigator.geolocation) {
+        locationStatus.style.display = 'block';
         locationStatus.className = 'alert alert-danger';
-        locationStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Browser Anda tidak mendukung GPS. Gunakan Chrome atau Firefox.';
+        locationText.innerHTML = 'Browser tidak mendukung GPS. Silakan gunakan Chrome atau Firefox.';
+        submitBtn.disabled = true;
         return;
     }
 
+    // Tampilkan loading
+    getLocationBtn.disabled = true;
+    getLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mendapatkan lokasi...';
+    locationStatus.style.display = 'block';
     locationStatus.className = 'alert alert-info';
-    locationStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mendapatkan lokasi... Silakan izinkan akses lokasi jika diminta browser.';
-    submitBtn.disabled = true;
+    locationText.innerHTML = 'Mendapatkan lokasi...';
 
     navigator.geolocation.getCurrentPosition(
         function(position) {
@@ -396,9 +409,7 @@ function getLocationForCheckIn() {
             const lng = position.coords.longitude;
             const accuracy = position.coords.accuracy;
 
-            checkInLatitude = lat;
-            checkInLongitude = lng;
-
+            // Set nilai ke input hidden
             document.getElementById('checkInLatitude').value = lat;
             document.getElementById('checkInLongitude').value = lng;
 
@@ -410,40 +421,57 @@ function getLocationForCheckIn() {
                 if (response.success) {
                     if (response.is_valid) {
                         locationStatus.className = 'alert alert-success';
-                        locationStatus.innerHTML = `<i class="fas fa-check-circle"></i> ✅ Lokasi valid! Anda berada dalam radius kantor.<br>
-                            <small>Lokasi: ${response.location_name} (${response.distance} meter dari kantor, akurasi: ${Math.round(accuracy)} meter)</small>`;
+                        locationText.innerHTML = '<i class="fas fa-check-circle"></i> ✅ Lokasi valid! Anda berada di dalam radius kantor.<br>' +
+                            '<small>Lokasi: ' + response.location_name + '<br>' +
+                            'Jarak: ' + response.distance + ' meter (Akurasi: ' + Math.round(accuracy) + ' meter)</small>';
                         submitBtn.disabled = false;
                     } else {
                         locationStatus.className = 'alert alert-danger';
-                        locationStatus.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ❌ Anda berada di luar radius kantor!<br>
-                            <small>Jarak: ${response.distance} meter (Maksimal: ${response.max_distance} meter)</small>`;
+                        locationText.innerHTML = '<i class="fas fa-times-circle"></i> ❌ Anda berada di luar radius kantor!<br>' +
+                            '<small>Lokasi: ' + response.location_name + '<br>' +
+                            'Jarak: ' + response.distance + ' meter (Maksimal: ' + response.max_distance + ' meter)</small>';
                         submitBtn.disabled = true;
                     }
                 } else {
                     locationStatus.className = 'alert alert-danger';
-                    locationStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal validasi lokasi. Silakan coba lagi.';
+                    locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal validasi lokasi. Silakan coba lagi.';
                     submitBtn.disabled = true;
                 }
+
+                // Reset tombol
+                getLocationBtn.disabled = false;
+                getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Lagi';
             }).fail(function() {
                 locationStatus.className = 'alert alert-danger';
-                locationStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal koneksi ke server. Periksa koneksi internet.';
+                locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal koneksi ke server. Periksa koneksi internet.';
                 submitBtn.disabled = true;
+                getLocationBtn.disabled = false;
+                getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Lagi';
             });
         },
         function(error) {
             let errorMessage = '';
-            if (error.code === 1) {
-                errorMessage = 'Anda menolak akses lokasi. Silakan izinkan akses lokasi di browser.';
-            } else if (error.code === 2) {
-                errorMessage = 'Tidak dapat mendeteksi lokasi. Pastikan GPS aktif dan sinyal cukup kuat.';
-            } else if (error.code === 3) {
-                errorMessage = 'Timeout. Coba lagi dan pastikan koneksi stabil.';
-            } else {
-                errorMessage = error.message || 'Gagal mendapatkan lokasi.';
+            switch(error.code) {
+                case 1:
+                    errorMessage = 'Anda menolak akses lokasi. Silakan izinkan akses lokasi di browser.';
+                    break;
+                case 2:
+                    errorMessage = 'Tidak dapat mendeteksi lokasi. Pastikan GPS aktif dan sinyal cukup kuat.';
+                    break;
+                case 3:
+                    errorMessage = 'Timeout. Coba lagi dan pastikan koneksi stabil.';
+                    break;
+                default:
+                    errorMessage = error.message || 'Gagal mendapatkan lokasi.';
             }
+
+            locationStatus.style.display = 'block';
             locationStatus.className = 'alert alert-danger';
-            locationStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + errorMessage;
+            locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + errorMessage;
             submitBtn.disabled = true;
+
+            getLocationBtn.disabled = false;
+            getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Lagi';
         },
         {
             enableHighAccuracy: true,
@@ -453,20 +481,27 @@ function getLocationForCheckIn() {
     );
 }
 
-// Fungsi untuk mendapatkan lokasi check out
-function getLocationForCheckOut() {
+// Fungsi untuk mengambil lokasi check out
+function getCurrentLocationForCheckOut() {
     const locationStatus = document.getElementById('locationStatusOut');
+    const locationText = document.getElementById('locationTextOut');
     const submitBtn = document.getElementById('submitCheckOut');
+    const getLocationBtn = document.getElementById('getLocationOutBtn');
 
     if (!navigator.geolocation) {
+        locationStatus.style.display = 'block';
         locationStatus.className = 'alert alert-danger';
-        locationStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Browser Anda tidak mendukung GPS.';
+        locationText.innerHTML = 'Browser tidak mendukung GPS. Silakan gunakan Chrome atau Firefox.';
+        submitBtn.disabled = true;
         return;
     }
 
+    // Tampilkan loading
+    getLocationBtn.disabled = true;
+    getLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mendapatkan lokasi...';
+    locationStatus.style.display = 'block';
     locationStatus.className = 'alert alert-info';
-    locationStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mendapatkan lokasi... Silakan izinkan akses lokasi jika diminta browser.';
-    submitBtn.disabled = true;
+    locationText.innerHTML = 'Mendapatkan lokasi...';
 
     navigator.geolocation.getCurrentPosition(
         function(position) {
@@ -474,12 +509,11 @@ function getLocationForCheckOut() {
             const lng = position.coords.longitude;
             const accuracy = position.coords.accuracy;
 
-            checkOutLatitude = lat;
-            checkOutLongitude = lng;
-
+            // Set nilai ke input hidden
             document.getElementById('checkOutLatitude').value = lat;
             document.getElementById('checkOutLongitude').value = lng;
 
+            // Validasi ke server
             $.get('{{ route("employee.attendance.current-location") }}', {
                 latitude: lat,
                 longitude: lng
@@ -487,32 +521,57 @@ function getLocationForCheckOut() {
                 if (response.success) {
                     if (response.is_valid) {
                         locationStatus.className = 'alert alert-success';
-                        locationStatus.innerHTML = `<i class="fas fa-check-circle"></i> ✅ Lokasi valid! Anda berada dalam radius kantor.<br>
-                            <small>Lokasi: ${response.location_name} (${response.distance} meter dari kantor, akurasi: ${Math.round(accuracy)} meter)</small>`;
+                        locationText.innerHTML = '<i class="fas fa-check-circle"></i> ✅ Lokasi valid! Anda berada di dalam radius kantor.<br>' +
+                            '<small>Lokasi: ' + response.location_name + '<br>' +
+                            'Jarak: ' + response.distance + ' meter (Akurasi: ' + Math.round(accuracy) + ' meter)</small>';
                         submitBtn.disabled = false;
                     } else {
                         locationStatus.className = 'alert alert-danger';
-                        locationStatus.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ❌ Anda berada di luar radius kantor!<br>
-                            <small>Jarak: ${response.distance} meter (Maksimal: ${response.max_distance} meter)</small>`;
+                        locationText.innerHTML = '<i class="fas fa-times-circle"></i> ❌ Anda berada di luar radius kantor!<br>' +
+                            '<small>Lokasi: ' + response.location_name + '<br>' +
+                            'Jarak: ' + response.distance + ' meter (Maksimal: ' + response.max_distance + ' meter)</small>';
                         submitBtn.disabled = true;
                     }
+                } else {
+                    locationStatus.className = 'alert alert-danger';
+                    locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal validasi lokasi. Silakan coba lagi.';
+                    submitBtn.disabled = true;
                 }
+
+                // Reset tombol
+                getLocationBtn.disabled = false;
+                getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Lagi';
+            }).fail(function() {
+                locationStatus.className = 'alert alert-danger';
+                locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal koneksi ke server. Periksa koneksi internet.';
+                submitBtn.disabled = true;
+                getLocationBtn.disabled = false;
+                getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Lagi';
             });
         },
         function(error) {
             let errorMessage = '';
-            if (error.code === 1) {
-                errorMessage = 'Anda menolak akses lokasi. Silakan izinkan akses lokasi.';
-            } else if (error.code === 2) {
-                errorMessage = 'Tidak dapat mendeteksi lokasi. Pastikan GPS aktif.';
-            } else if (error.code === 3) {
-                errorMessage = 'Timeout. Coba lagi.';
-            } else {
-                errorMessage = error.message || 'Gagal mendapatkan lokasi.';
+            switch(error.code) {
+                case 1:
+                    errorMessage = 'Anda menolak akses lokasi. Silakan izinkan akses lokasi di browser.';
+                    break;
+                case 2:
+                    errorMessage = 'Tidak dapat mendeteksi lokasi. Pastikan GPS aktif dan sinyal cukup kuat.';
+                    break;
+                case 3:
+                    errorMessage = 'Timeout. Coba lagi dan pastikan koneksi stabil.';
+                    break;
+                default:
+                    errorMessage = error.message || 'Gagal mendapatkan lokasi.';
             }
+
+            locationStatus.style.display = 'block';
             locationStatus.className = 'alert alert-danger';
-            locationStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + errorMessage;
+            locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + errorMessage;
             submitBtn.disabled = true;
+
+            getLocationBtn.disabled = false;
+            getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Lagi';
         },
         {
             enableHighAccuracy: true,
@@ -521,6 +580,32 @@ function getLocationForCheckOut() {
         }
     );
 }
+
+// Reset modal check in saat ditutup
+$('#checkInModal').on('hidden.bs.modal', function() {
+    document.getElementById('locationStatus').style.display = 'none';
+    document.getElementById('checkInLatitude').value = '';
+    document.getElementById('checkInLongitude').value = '';
+    document.getElementById('submitCheckIn').disabled = true;
+    const getLocationBtn = document.getElementById('getLocationBtn');
+    if (getLocationBtn) {
+        getLocationBtn.disabled = false;
+        getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Saat Ini';
+    }
+});
+
+// Reset modal check out saat ditutup
+$('#checkOutModal').on('hidden.bs.modal', function() {
+    document.getElementById('locationStatusOut').style.display = 'none';
+    document.getElementById('checkOutLatitude').value = '';
+    document.getElementById('checkOutLongitude').value = '';
+    document.getElementById('submitCheckOut').disabled = true;
+    const getLocationBtn = document.getElementById('getLocationOutBtn');
+    if (getLocationBtn) {
+        getLocationBtn.disabled = false;
+        getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Saat Ini';
+    }
+});
 
 function showPhoto(url, title) {
     document.getElementById('photoModalTitle').textContent = title;

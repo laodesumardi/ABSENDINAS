@@ -8,7 +8,6 @@ use App\Models\WorkLocation;
 use App\Models\WorkSchedule;
 use App\Models\Holiday;
 use App\Models\ActivityLog;
-use App\Services\GeoLocationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -18,16 +17,6 @@ use Illuminate\Support\Facades\Log;
 
 class AttendanceController extends Controller
 {
-    protected $geoLocationService;
-
-    public function __construct(GeoLocationService $geoLocationService)
-    {
-        $this->geoLocationService = $geoLocationService;
-    }
-
-    /**
-     * Display attendance dashboard
-     */
     public function index()
     {
         $today = now()->format('Y-m-d');
@@ -38,10 +27,9 @@ class AttendanceController extends Controller
         $isHoliday = Holiday::isHoliday($today);
         $holidayInfo = $isHoliday ? Holiday::getHolidayByDate($today) : null;
 
-        // Ambil schedule dari database
         $schedule = WorkSchedule::getTodaySchedule();
 
-        // Jika schedule tidak ada atau tidak valid, buat default untuk testing
+        // Jika schedule tidak ada, buat default untuk testing
         if (!$schedule || !$schedule->check_in_start || $schedule->check_in_start == '00:00:00') {
             $schedule = new \stdClass();
             $schedule->is_working_day = true;
@@ -51,15 +39,14 @@ class AttendanceController extends Controller
             $schedule->check_out_end = '23:00:00';
         }
 
-        // Untuk testing: selalu bisa check in
+        // Untuk testing: selalu bisa check in dan check out
         $canCheckIn = true;
         $canCheckOut = true;
 
-        // Tampilkan info jadwal untuk debugging
+        // Format waktu untuk ditampilkan
         $checkInWindow = date('H:i', strtotime($schedule->check_in_start)) . ' - ' . date('H:i', strtotime($schedule->check_in_end));
         $checkOutWindow = date('H:i', strtotime($schedule->check_out_start)) . ' - ' . date('H:i', strtotime($schedule->check_out_end));
 
-        // Hitung durasi
         $start = Carbon::parse($schedule->check_in_start);
         $end = Carbon::parse($schedule->check_out_end);
         $diff = $start->diff($end);
@@ -110,72 +97,105 @@ class AttendanceController extends Controller
         ));
     }
 
-    // Method lainnya tetap sama...
-
-
-    /**
-     * Check if user can check in
-     */
-
-
-
-
-    private function canCheckIn($schedule, $todayAttendance)
+    public function checkIn(Request $request)
     {
-        // Jika sudah check in hari ini
-        if ($todayAttendance) {
-            return false;
+        // Debug log
+        Log::info('Check In Request:', $request->all());
+
+        // Check if already checked in today
+        $existingAttendance = Attendance::where('user_id', Auth::id())
+            ->whereDate('attendance_date', today())
+            ->first();
+
+        if ($existingAttendance) {
+            return redirect()->back()->with('error', 'Anda sudah melakukan check in hari ini.');
         }
 
-        // Jika tidak ada schedule atau hari libur
-        if (!$schedule || !$schedule->is_working_day) {
-            return false;
+        // Check if today is holiday
+        if (Holiday::isHoliday(today())) {
+            return redirect()->back()->with('error', 'Hari ini adalah hari libur, tidak perlu check in.');
         }
 
-        $now = now();
-        $checkInStart = Carbon::parse($schedule->check_in_start);
-        $checkInEnd = Carbon::parse($schedule->check_in_end);
+        $validator = Validator::make($request->all(), [
+            'latitude' => 'required|numeric',
+            'longitude' => 'required|numeric',
+            'photo' => 'nullable|image|max:2048|mimes:jpg,jpeg,png',
+            'notes' => 'nullable|string|max:500',
+        ]);
 
-        // Tambahkan toleransi 2 jam setelah batas check in
-        $maxCheckInTime = (clone $checkInEnd)->addHours(2);
+        if ($validator->fails()) {
+            return redirect()->back()->withErrors($validator)->withInput();
+        }
 
-        // Cek apakah sekarang dalam waktu check in
-        return $now->between($checkInStart, $maxCheckInTime);
+        // VALIDASI LOKASI DI AKTIFKAN KEMBALI
+        $workLocation = WorkLocation::where('is_active', true)->first();
+        if (!$workLocation) {
+            return redirect()->back()->with('error', 'Lokasi kerja belum dikonfigurasi. Silakan hubungi admin.');
+        }
+
+        $isValidLocation = $workLocation->isWithinRadius(
+            $request->latitude,
+            $request->longitude
+        );
+
+        if (!$isValidLocation) {
+            $distance = $workLocation->calculateDistance(
+                $request->latitude,
+                $request->longitude,
+                $workLocation->latitude,
+                $workLocation->longitude
+            );
+            return redirect()->back()->with('error', "Anda berada di luar radius kantor! Jarak: " . round($distance) . " meter (Maksimal: {$workLocation->radius} meter)");
+        }
+
+        // Get schedule and check if late
+        $schedule = WorkSchedule::getTodaySchedule();
+        $checkInTime = now();
+        $isLate = false;
+        $lateMinutes = 0;
+
+        if ($schedule && $schedule->is_working_day) {
+            $checkInEnd = Carbon::parse($schedule->check_in_end);
+            if ($checkInTime > $checkInEnd) {
+                $isLate = true;
+                $lateMinutes = $checkInTime->diffInMinutes($checkInEnd);
+            }
+        }
+
+        // Handle photo upload
+        $photoPath = null;
+        if ($request->hasFile('photo')) {
+            $photoPath = $request->file('photo')->store('attendance-photos/' . date('Y/m'), 'public');
+        }
+
+        $attendance = Attendance::create([
+            'user_id' => Auth::id(),
+            'attendance_date' => today(),
+            'check_in_time' => $checkInTime->format('H:i:s'),
+            'check_in_latitude' => $request->latitude,
+            'check_in_longitude' => $request->longitude,
+            'check_in_photo' => $photoPath,
+            'status' => $isLate ? 'late' : 'present',
+            'late_minutes' => $lateMinutes,
+            'notes' => $request->notes,
+        ]);
+
+        // Log activity
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'check_in',
+            'description' => "Check in pada " . $checkInTime->format('H:i:s') . ($isLate ? " (Terlambat {$lateMinutes} menit)" : " (Tepat waktu)"),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        Log::info('Check In Success:', $attendance->toArray());
+
+        $message = $isLate ? "Check in berhasil! (Terlambat {$lateMinutes} menit)" : "Check in berhasil! Selamat bekerja.";
+
+        return redirect()->route('employee.attendance.index')->with('success', $message);
     }
-    /**
-     * Check if user can check out
-     */
-    private function canCheckOut($schedule, $todayAttendance)
-    {
-        // Jika belum check in atau sudah check out
-        if (!$todayAttendance || $todayAttendance->check_out_time) {
-            return false;
-        }
 
-        // Jika tidak ada jadwal atau hari libur
-        if (!$schedule || !$schedule->is_working_day) {
-            return true;
-        }
-
-        $now = now();
-        $checkOutStart = Carbon::parse($schedule->check_out_start);
-        $checkOutEnd = Carbon::parse($schedule->check_out_end);
-
-        // Allow checkout dari 1 jam sebelum sampai 12 jam setelah
-        $minCheckOutTime = (clone $checkOutStart)->subHour();
-        $maxCheckOutTime = (clone $checkOutEnd)->addHours(12);
-
-        return $now->between($minCheckOutTime, $maxCheckOutTime);
-    }
-
-    /**
-     * Process check in
-     */
-    checkIn
-
-    /**
-     * Process check out
-     */
     public function checkOut(Request $request)
     {
         $attendance = Attendance::where('user_id', Auth::id())
@@ -190,14 +210,9 @@ class AttendanceController extends Controller
             return redirect()->back()->with('error', 'Anda sudah melakukan check out hari ini.');
         }
 
-        // Check if today is holiday
-        if (Holiday::isHoliday(today())) {
-            return redirect()->back()->with('error', 'Hari ini adalah hari libur, tidak perlu check out.');
-        }
-
         $validator = Validator::make($request->all(), [
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
             'photo' => 'nullable|image|max:2048|mimes:jpg,jpeg,png',
         ]);
 
@@ -205,49 +220,20 @@ class AttendanceController extends Controller
             return redirect()->back()->withErrors($validator)->withInput();
         }
 
-        // Validate location for checkout
-        $workLocation = WorkLocation::where('is_active', true)->first();
-        if ($workLocation) {
-            $isValidLocation = $workLocation->isWithinRadius(
-                $request->latitude,
-                $request->longitude
-            );
+        $checkOutTime = now();
+        $latitude = $request->latitude ?: -6.200000;
+        $longitude = $request->longitude ?: 106.816666;
 
-            if (!$isValidLocation) {
-                $distance = $workLocation->calculateDistance(
-                    $request->latitude,
-                    $request->longitude,
-                    $workLocation->latitude,
-                    $workLocation->longitude
-                );
-                return redirect()->back()->with('error', "Anda harus berada di dalam radius kantor untuk check out. Jarak: " . round($distance) . " meter");
-            }
-        }
-
-        // Handle photo upload
         $photoPath = null;
         if ($request->hasFile('photo')) {
             $photoPath = $request->file('photo')->store('attendance-photos/' . date('Y/m'), 'public');
         }
 
-        $checkOutTime = now();
-
-        // Check early checkout
-        $schedule = WorkSchedule::getTodaySchedule();
-        $earlyCheckoutMinutes = 0;
-        if ($schedule && $schedule->is_working_day) {
-            $checkOutStart = Carbon::parse($schedule->check_out_start);
-            if ($checkOutTime < $checkOutStart) {
-                $earlyCheckoutMinutes = $checkOutStart->diffInMinutes($checkOutTime);
-            }
-        }
-
         $attendance->update([
             'check_out_time' => $checkOutTime->format('H:i:s'),
-            'check_out_latitude' => $request->latitude,
-            'check_out_longitude' => $request->longitude,
+            'check_out_latitude' => $latitude,
+            'check_out_longitude' => $longitude,
             'check_out_photo' => $photoPath,
-            'early_checkout_minutes' => $earlyCheckoutMinutes,
         ]);
 
         // Calculate work duration
@@ -255,33 +241,24 @@ class AttendanceController extends Controller
         $checkOut = Carbon::parse($attendance->check_out_time);
         $workDuration = $checkIn->diff($checkOut);
 
-        // Log activity
         ActivityLog::create([
             'user_id' => Auth::id(),
             'action' => 'check_out',
-            'description' => "Check out pada " . $checkOutTime->format('H:i:s') .
-                ($earlyCheckoutMinutes > 0 ? " (Pulang lebih awal {$earlyCheckoutMinutes} menit)" : ""),
+            'description' => "Check out pada " . $checkOutTime->format('H:i:s'),
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
         ]);
 
         $durationText = $workDuration->format('%h jam %i menit');
         $message = "Check out berhasil! Durasi kerja: {$durationText}";
-        if ($earlyCheckoutMinutes > 0) {
-            $message .= " (Pulang lebih awal {$earlyCheckoutMinutes} menit)";
-        }
 
         return redirect()->route('employee.attendance.index')->with('success', $message);
     }
 
-    /**
-     * Display attendance history
-     */
     public function history(Request $request)
     {
         $query = Attendance::where('user_id', Auth::id());
 
-        // Filter by month
         if ($request->filled('month')) {
             $month = $request->month;
             $year = $request->filled('year') ? $request->year : date('Y');
@@ -295,7 +272,6 @@ class AttendanceController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        // Get statistics by month
         $monthlyStats = Attendance::where('user_id', Auth::id())
             ->selectRaw('
                 DATE_FORMAT(attendance_date, "%Y-%m") as month,
@@ -309,7 +285,6 @@ class AttendanceController extends Controller
             ->orderBy('month', 'desc')
             ->get();
 
-        // Get available years for filter
         $years = Attendance::where('user_id', Auth::id())
             ->selectRaw('DISTINCT YEAR(attendance_date) as year')
             ->orderBy('year', 'desc')
@@ -323,9 +298,6 @@ class AttendanceController extends Controller
         return view('employee.attendance.history', compact('attendances', 'monthlyStats', 'years'));
     }
 
-    /**
-     * Get current location validation
-     */
     public function getCurrentLocation(Request $request)
     {
         $workLocation = WorkLocation::where('is_active', true)->first();
@@ -342,12 +314,7 @@ class AttendanceController extends Controller
 
         if ($latitude && $longitude) {
             $isValid = $workLocation->isWithinRadius($latitude, $longitude);
-            $distance = $workLocation->calculateDistance(
-                $latitude,
-                $longitude,
-                $workLocation->latitude,
-                $workLocation->longitude
-            );
+            $distance = $workLocation->calculateDistance($latitude, $longitude, $workLocation->latitude, $workLocation->longitude);
 
             return response()->json([
                 'success' => true,
@@ -368,125 +335,5 @@ class AttendanceController extends Controller
                 'radius' => $workLocation->radius
             ]
         ]);
-    }
-
-    /**
-     * Verify manual location code
-     */
-    public function verifyLocation(Request $request)
-    {
-        $request->validate([
-            'code' => 'required|string'
-        ]);
-
-        $validCodes = [
-            'KANTOR123' => ['latitude' => -6.200000, 'longitude' => 106.816666],
-            'ABSEN123' => ['latitude' => -6.200000, 'longitude' => 106.816666],
-        ];
-
-        if (isset($validCodes[$request->code])) {
-            return response()->json([
-                'success' => true,
-                'latitude' => $validCodes[$request->code]['latitude'],
-                'longitude' => $validCodes[$request->code]['longitude']
-            ]);
-        }
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Kode verifikasi tidak valid'
-        ]);
-    }
-
-    /**
-     * Get attendance detail for modal
-     */
-    public function getDetail($id)
-    {
-        $attendance = Attendance::with('user')
-            ->where('user_id', Auth::id())
-            ->findOrFail($id);
-
-        $duration = '';
-        if ($attendance->check_in_time && $attendance->check_out_time) {
-            $checkIn = Carbon::parse($attendance->check_in_time);
-            $checkOut = Carbon::parse($attendance->check_out_time);
-            $diff = $checkIn->diff($checkOut);
-            $duration = $diff->format('%h jam %i menit');
-        }
-
-        $html = '
-        <div class="row">
-            <div class="col-md-6">
-                <table class="table table-borderless">
-                    <tr>
-                        <th width="40%">Tanggal</th>
-                        <td>: ' . $attendance->attendance_date->format('d F Y') . ' (' . $attendance->attendance_date->format('l') . ')</td>
-                    </tr>
-                    <tr>
-                        <th>Status</th>
-                        <td>: <span class="badge bg-' . ($attendance->status == 'present' ? 'success' : ($attendance->status == 'late' ? 'warning' : 'danger')) . '">' . ucfirst($attendance->status) . '</span></td>
-                    </tr>
-                    <tr>
-                        <th>Check In</th>
-                        <td>: ' . ($attendance->check_in_time ?? '-') . '</td>
-                    </tr>
-                    <tr>
-                        <th>Lokasi Check In</th>
-                        <td>: ' . ($attendance->check_in_latitude ? number_format($attendance->check_in_latitude, 6) . ', ' . number_format($attendance->check_in_longitude, 6) : '-') . '</td>
-                    </tr>
-                    <tr>
-                        <th>Keterlambatan</th>
-                        <td>: ' . ($attendance->late_minutes > 0 ? $attendance->late_minutes . ' menit' : '-') . '</td>
-                    </tr>
-                </table>
-            </div>
-            <div class="col-md-6">
-                <table class="table table-borderless">
-                    <tr>
-                        <th width="40%">Durasi Kerja</th>
-                        <td>: ' . $duration . '</td>
-                    </tr>
-                    <tr>
-                        <th>Check Out</th>
-                        <td>: ' . ($attendance->check_out_time ?? '-') . '</td>
-                    </tr>
-                    <tr>
-                        <th>Lokasi Check Out</th>
-                        <td>: ' . ($attendance->check_out_latitude ? number_format($attendance->check_out_latitude, 6) . ', ' . number_format($attendance->check_out_longitude, 6) : '-') . '</td>
-                    </tr>
-                    <tr>
-                        <th>Pulang Awal</th>
-                        <td>: ' . ($attendance->early_checkout_minutes > 0 ? $attendance->early_checkout_minutes . ' menit' : '-') . '</td>
-                    </tr>
-                    <tr>
-                        <th>Catatan</th>
-                        <td>: ' . ($attendance->notes ?? '-') . '</td>
-                    </tr>
-                </table>
-            </div>
-        </div>';
-
-        if ($attendance->check_in_photo) {
-            $html .= '<div class="mt-3 row">
-                <div class="col-12">
-                    <hr>
-                    <h6><i class="fas fa-camera"></i> Foto Check In</h6>
-                    <img src="' . Storage::url($attendance->check_in_photo) . '" class="rounded img-fluid" style="max-height: 200px;">
-                </div>
-            </div>';
-        }
-
-        if ($attendance->check_out_photo) {
-            $html .= '<div class="mt-3 row">
-                <div class="col-12">
-                    <hr>
-                    <h6><i class="fas fa-camera"></i> Foto Check Out</h6>
-                    <img src="' . Storage::url($attendance->check_out_photo) . '" class="rounded img-fluid" style="max-height: 200px;">
-                </div>
-            </div>';
-        }
-
-        return response()->json(['html' => $html]);
     }
 }
