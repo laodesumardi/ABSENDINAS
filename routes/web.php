@@ -414,3 +414,14 @@ Route::middleware(['role:admin'])->prefix('admin')->name('admin.')->group(functi
     Route::post('/reports/attendance/bulk-update', [AttendanceReportController::class, 'bulkUpdate'])->name('reports.bulk-update');
     Route::get('/reports/attendance/export', [AttendanceReportController::class, 'export'])->name('reports.export');
 });
+
+// Admin routes
+Route::middleware(['role:admin'])->prefix('admin')->name('admin.')->group(function () {
+    // ... existing routes ...
+
+    // Work Schedules
+    Route::get('/schedules', [WorkScheduleController::class, 'index'])->name('schedules.index');
+    Route::get('/schedules/{day}/edit', [WorkScheduleController::class, 'edit'])->name('schedules.edit');
+    Route::put('/schedules/{day}', [WorkScheduleController::class, 'update'])->name('schedules.update');
+    Route::post('/schedules/reset', [WorkScheduleController::class, 'reset'])->name('schedules.reset'); // POST method
+});

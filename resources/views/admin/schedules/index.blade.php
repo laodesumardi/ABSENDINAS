@@ -160,7 +160,6 @@
             <div class="modal-footer">
                 <form id="resetForm" method="POST" action="{{ route('admin.schedules.reset') }}">
                     @csrf
-                    @method('POST')
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
                     <button type="submit" class="btn btn-warning">Ya, Reset</button>
                 </form>
