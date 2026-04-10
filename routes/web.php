@@ -399,3 +399,18 @@ Route::middleware(['role:employee,operator,admin'])->prefix('employee')->name('e
     Route::resource('/leaves', LeaveController::class);
     Route::delete('/leaves/{leave}/cancel', [LeaveController::class, 'cancel'])->name('leaves.cancel');
 });
+
+// Admin routes
+Route::middleware(['role:admin'])->prefix('admin')->name('admin.')->group(function () {
+    // ... existing routes ...
+
+    // Attendance Reports with Edit
+    Route::get('/reports/attendance', [AttendanceReportController::class, 'index'])->name('reports.attendance');
+    Route::get('/reports/attendance/create', [AttendanceReportController::class, 'create'])->name('reports.create');
+    Route::post('/reports/attendance', [AttendanceReportController::class, 'store'])->name('reports.store');
+    Route::get('/reports/attendance/{id}/edit', [AttendanceReportController::class, 'edit'])->name('reports.edit');
+    Route::put('/reports/attendance/{id}', [AttendanceReportController::class, 'update'])->name('reports.update');
+    Route::delete('/reports/attendance/{id}', [AttendanceReportController::class, 'destroy'])->name('reports.destroy');
+    Route::post('/reports/attendance/bulk-update', [AttendanceReportController::class, 'bulkUpdate'])->name('reports.bulk-update');
+    Route::get('/reports/attendance/export', [AttendanceReportController::class, 'export'])->name('reports.export');
+});

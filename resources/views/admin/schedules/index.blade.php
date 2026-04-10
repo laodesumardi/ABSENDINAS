@@ -37,10 +37,10 @@
     </div>
 
     <!-- Action Buttons -->
-    <div class="row mt-4">
+    <div class="mt-4 row">
         <div class="col-12">
             <div class="stat-card">
-                <div class="d-flex justify-content-between align-items-center flex-wrap">
+                <div class="flex-wrap d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
                         <i class="fas fa-calendar-week"></i> Daftar Jadwal Kerja
                     </h5>
@@ -55,7 +55,7 @@
     </div>
 
     <!-- Schedules Table -->
-    <div class="row mt-4">
+    <div class="mt-4 row">
         <div class="col-12">
             <div class="stat-card">
                 <div class="table-responsive">
@@ -87,35 +87,41 @@
                                     </span>
                                 </td>
                                 <td>
-                                    @if($schedule->is_working_day)
+                                    @if($schedule->is_working_day && $schedule->check_in_start && $schedule->check_in_end)
                                         <i class="fas fa-sign-in-alt text-success"></i>
-                                        {{ $schedule->check_in_start->format('H:i') }} - {{ $schedule->check_in_end->format('H:i') }}
+                                        {{ date('H:i', strtotime($schedule->check_in_start)) }} - {{ date('H:i', strtotime($schedule->check_in_end)) }}
                                         <br>
                                         <small class="text-muted">
                                             <i class="fas fa-info-circle"></i>
-                                            Terlambat setelah {{ $schedule->check_in_end->format('H:i') }}
+                                            Terlambat setelah {{ date('H:i', strtotime($schedule->check_in_end)) }}
                                         </small>
                                     @else
                                         <span class="text-muted">-</span>
                                     @endif
                                 </td>
                                 <td>
-                                    @if($schedule->is_working_day)
+                                    @if($schedule->is_working_day && $schedule->check_out_start && $schedule->check_out_end)
                                         <i class="fas fa-sign-out-alt text-danger"></i>
-                                        {{ $schedule->check_out_start->format('H:i') }} - {{ $schedule->check_out_end->format('H:i') }}
+                                        {{ date('H:i', strtotime($schedule->check_out_start)) }} - {{ date('H:i', strtotime($schedule->check_out_end)) }}
                                         <br>
                                         <small class="text-muted">
                                             <i class="fas fa-info-circle"></i>
-                                            Minimal check out {{ $schedule->check_out_start->format('H:i') }}
+                                            Minimal check out {{ date('H:i', strtotime($schedule->check_out_start)) }}
                                         </small>
                                     @else
                                         <span class="text-muted">-</span>
                                     @endif
                                 </td>
                                 <td>
-                                    @if($schedule->is_working_day)
+                                    @if($schedule->is_working_day && $schedule->check_in_start && $schedule->check_out_end)
+                                        @php
+                                            $start = \Carbon\Carbon::parse($schedule->check_in_start);
+                                            $end = \Carbon\Carbon::parse($schedule->check_out_end);
+                                            $diff = $start->diff($end);
+                                            $workingHours = $diff->format('%h jam %i menit');
+                                        @endphp
                                         <span class="badge bg-info">
-                                            {{ $schedule->working_hours }}
+                                            {{ $workingHours }}
                                         </span>
                                     @else
                                         <span class="text-muted">-</span>
@@ -149,7 +155,7 @@
             </div>
             <div class="modal-body">
                 <p>Apakah Anda yakin ingin mereset semua jadwal kerja ke default?</p>
-                <p class="text-warning mb-0">Semua perubahan yang telah dibuat akan hilang!</p>
+                <p class="mb-0 text-warning">Semua perubahan yang telah dibuat akan hilang!</p>
             </div>
             <div class="modal-footer">
                 <form id="resetForm" method="POST" action="{{ route('admin.schedules.reset') }}">

@@ -7,7 +7,7 @@
 
 
 @if(auth()->user()->isAdmin() && isset($debugInfo))
-<div class="row mt-3">
+<div class="mt-3 row">
     <div class="col-12">
         <div class="alert alert-info">
             <h6><i class="fas fa-bug"></i> Debug Info (Hanya Admin)</h6>
@@ -51,42 +51,38 @@
 
     <!-- Holiday Alert -->
     @if(isset($isHoliday) && $isHoliday && isset($holidayInfo))
-    <div class="row mt-3">
+    <div class="mt-3 row">
         <div class="col-12">
             <div class="alert alert-warning">
                 <i class="fas fa-gift"></i>
                 <strong>Hari Libur!</strong> {{ $holidayInfo->name }}
-                <p class="mb-0 mt-1">Anda tidak perlu melakukan absensi hari ini.</p>
+                <p class="mt-1 mb-0">Anda tidak perlu melakukan absensi hari ini.</p>
             </div>
         </div>
     </div>
     @endif
 
-    <!-- Schedule Info -->
-    <div class="row mt-3">
-        <div class="col-12">
-            <div class="alert alert-info">
-                <i class="fas fa-clock"></i>
-                <strong>Jadwal Hari Ini:</strong>
-                @if(isset($schedule) && $schedule && $schedule->is_working_day)
-                    Check In: {{ $schedule->check_in_window }} |
-                    Check Out: {{ $schedule->check_out_window }} |
-                    Durasi Kerja: {{ $schedule->working_hours }}
-                @else
-                    Hari Libur / Tidak ada jadwal kerja
-                @endif
-            </div>
+  <!-- Schedule Info -->
+<div class="mt-3 row">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <i class="fas fa-clock"></i>
+            <strong>Jadwal Hari Ini (Testing Mode):</strong>
+            Check In: {{ $checkInWindow ?? '08:00 - 20:00' }} |
+            Check Out: {{ $checkOutWindow ?? '17:00 - 23:00' }} |
+            Durasi Kerja: {{ $workingHours ?? '12 jam' }}
         </div>
     </div>
+</div>
 
     <!-- Attendance Cards -->
-    <div class="row mt-4">
+    <div class="mt-4 row">
         <!-- Check In Card -->
         <div class="col-md-6">
-            <div class="stat-card text-center">
+            <div class="text-center stat-card">
                 @if(isset($todayAttendance) && $todayAttendance && $todayAttendance->check_in_time)
                     <div class="mb-3">
-                        <div class="stat-icon success mx-auto mb-3" style="width: 80px; height: 80px; font-size: 2.5rem;">
+                        <div class="mx-auto mb-3 stat-icon success" style="width: 80px; height: 80px; font-size: 2.5rem;">
                             <i class="fas fa-check-circle"></i>
                         </div>
                         <h5>Check In</h5>
@@ -99,7 +95,7 @@
                     </div>
                 @else
                     <div class="mb-3">
-                        <div class="stat-icon primary mx-auto mb-3" style="width: 80px; height: 80px; font-size: 2.5rem;">
+                        <div class="mx-auto mb-3 stat-icon primary" style="width: 80px; height: 80px; font-size: 2.5rem;">
                             <i class="fas fa-fingerprint"></i>
                         </div>
                         <h5>Check In</h5>
@@ -121,10 +117,10 @@
 
         <!-- Check Out Card -->
         <div class="col-md-6">
-            <div class="stat-card text-center">
+            <div class="text-center stat-card">
                 @if(isset($todayAttendance) && $todayAttendance && $todayAttendance->check_out_time)
                     <div class="mb-3">
-                        <div class="stat-icon info mx-auto mb-3" style="width: 80px; height: 80px; font-size: 2.5rem;">
+                        <div class="mx-auto mb-3 stat-icon info" style="width: 80px; height: 80px; font-size: 2.5rem;">
                             <i class="fas fa-check-double"></i>
                         </div>
                         <h5>Check Out</h5>
@@ -135,7 +131,7 @@
                     </div>
                 @elseif(isset($todayAttendance) && $todayAttendance && $todayAttendance->check_in_time && !$todayAttendance->check_out_time)
                     <div class="mb-3">
-                        <div class="stat-icon warning mx-auto mb-3" style="width: 80px; height: 80px; font-size: 2.5rem;">
+                        <div class="mx-auto mb-3 stat-icon warning" style="width: 80px; height: 80px; font-size: 2.5rem;">
                             <i class="fas fa-sign-out-alt"></i>
                         </div>
                         <h5>Check Out</h5>
@@ -151,7 +147,7 @@
                     </div>
                 @else
                     <div class="mb-3">
-                        <div class="stat-icon secondary mx-auto mb-3" style="width: 80px; height: 80px; font-size: 2.5rem;">
+                        <div class="mx-auto mb-3 stat-icon secondary" style="width: 80px; height: 80px; font-size: 2.5rem;">
                             <i class="fas fa-clock"></i>
                         </div>
                         <h5>Check Out</h5>
@@ -163,7 +159,7 @@
     </div>
 
    <!-- Monthly Statistics -->
-<div class="row mt-4">
+<div class="mt-4 row">
     <div class="col-12">
         <div class="stat-card">
             <h5 class="mb-3">
@@ -171,32 +167,32 @@
             </h5>
             <div class="row">
                 <div class="col-md-3">
-                    <div class="text-center p-3 border rounded">
+                    <div class="p-3 text-center border rounded">
                         <h3 class="text-primary">{{ $monthStats->total ?? 0 }}</h3>
-                        <p class="text-muted mb-0">Total Kehadiran</p>
+                        <p class="mb-0 text-muted">Total Kehadiran</p>
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="text-center p-3 border rounded">
+                    <div class="p-3 text-center border rounded">
                         <h3 class="text-success">{{ $monthStats->present ?? 0 }}</h3>
-                        <p class="text-muted mb-0">Tepat Waktu</p>
+                        <p class="mb-0 text-muted">Tepat Waktu</p>
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="text-center p-3 border rounded">
+                    <div class="p-3 text-center border rounded">
                         <h3 class="text-warning">{{ $monthStats->late ?? 0 }}</h3>
-                        <p class="text-muted mb-0">Terlambat</p>
+                        <p class="mb-0 text-muted">Terlambat</p>
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="text-center p-3 border rounded">
+                    <div class="p-3 text-center border rounded">
                         <h3 class="text-danger">{{ $monthStats->absent ?? 0 }}</h3>
-                        <p class="text-muted mb-0">Tidak Hadir</p>
+                        <p class="mb-0 text-muted">Tidak Hadir</p>
                     </div>
                 </div>
             </div>
             @if(($monthStats->total_late_minutes ?? 0) > 0)
-                <div class="text-center mt-3">
+                <div class="mt-3 text-center">
                     <small class="text-warning">
                         <i class="fas fa-exclamation-triangle"></i>
                         Total keterlambatan: {{ floor(($monthStats->total_late_minutes ?? 0) / 60) }} jam {{ ($monthStats->total_late_minutes ?? 0) % 60 }} menit
@@ -208,10 +204,10 @@
 </div>
 
     <!-- Recent Attendances -->
-    <div class="row mt-4">
+    <div class="mt-4 row">
         <div class="col-12">
             <div class="stat-card">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="mb-3 d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
                         <i class="fas fa-history text-primary"></i> Riwayat Absensi Terbaru
                     </h5>
@@ -369,7 +365,7 @@
                 <h5 class="modal-title" id="photoModalTitle">Foto</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body text-center">
+            <div class="text-center modal-body">
                 <img id="photoImage" src="" alt="Foto" style="max-width: 100%; border-radius: 10px;">
             </div>
         </div>

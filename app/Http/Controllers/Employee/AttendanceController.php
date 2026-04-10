@@ -38,13 +38,35 @@ class AttendanceController extends Controller
         $isHoliday = Holiday::isHoliday($today);
         $holidayInfo = $isHoliday ? Holiday::getHolidayByDate($today) : null;
 
+        // Ambil schedule dari database
         $schedule = WorkSchedule::getTodaySchedule();
-        $canCheckIn = $this->canCheckIn($schedule, $todayAttendance);
-        $canCheckOut = $this->canCheckOut($schedule, $todayAttendance);
+
+        // Jika schedule tidak ada atau tidak valid, buat default untuk testing
+        if (!$schedule || !$schedule->check_in_start || $schedule->check_in_start == '00:00:00') {
+            $schedule = new \stdClass();
+            $schedule->is_working_day = true;
+            $schedule->check_in_start = '08:00:00';
+            $schedule->check_in_end = '20:00:00';
+            $schedule->check_out_start = '17:00:00';
+            $schedule->check_out_end = '23:00:00';
+        }
+
+        // Untuk testing: selalu bisa check in
+        $canCheckIn = true;
+        $canCheckOut = true;
+
+        // Tampilkan info jadwal untuk debugging
+        $checkInWindow = date('H:i', strtotime($schedule->check_in_start)) . ' - ' . date('H:i', strtotime($schedule->check_in_end));
+        $checkOutWindow = date('H:i', strtotime($schedule->check_out_start)) . ' - ' . date('H:i', strtotime($schedule->check_out_end));
+
+        // Hitung durasi
+        $start = Carbon::parse($schedule->check_in_start);
+        $end = Carbon::parse($schedule->check_out_end);
+        $diff = $start->diff($end);
+        $workingHours = $diff->format('%h jam %i menit');
 
         $workLocation = WorkLocation::where('is_active', true)->first();
 
-        // Monthly statistics
         $monthStats = Attendance::where('user_id', Auth::id())
             ->whereYear('attendance_date', now()->year)
             ->whereMonth('attendance_date', now()->month)
@@ -81,9 +103,15 @@ class AttendanceController extends Controller
             'canCheckOut',
             'workLocation',
             'monthStats',
-            'recentAttendances'
+            'recentAttendances',
+            'checkInWindow',
+            'checkOutWindow',
+            'workingHours'
         ));
     }
+
+    // Method lainnya tetap sama...
+
 
     /**
      * Check if user can check in
@@ -95,7 +123,7 @@ class AttendanceController extends Controller
             return false;
         }
 
-        // Jika tidak ada jadwal atau hari libur
+        // Jika tidak ada schedule atau hari libur
         if (!$schedule || !$schedule->is_working_day) {
             return false;
         }
@@ -110,7 +138,6 @@ class AttendanceController extends Controller
         // Cek apakah sekarang dalam waktu check in
         return $now->between($checkInStart, $maxCheckInTime);
     }
-
     /**
      * Check if user can check out
      */
@@ -529,21 +556,21 @@ class AttendanceController extends Controller
         </div>';
 
         if ($attendance->check_in_photo) {
-            $html .= '<div class="row mt-3">
+            $html .= '<div class="mt-3 row">
                 <div class="col-12">
                     <hr>
                     <h6><i class="fas fa-camera"></i> Foto Check In</h6>
-                    <img src="' . Storage::url($attendance->check_in_photo) . '" class="img-fluid rounded" style="max-height: 200px;">
+                    <img src="' . Storage::url($attendance->check_in_photo) . '" class="rounded img-fluid" style="max-height: 200px;">
                 </div>
             </div>';
         }
 
         if ($attendance->check_out_photo) {
-            $html .= '<div class="row mt-3">
+            $html .= '<div class="mt-3 row">
                 <div class="col-12">
                     <hr>
                     <h6><i class="fas fa-camera"></i> Foto Check Out</h6>
-                    <img src="' . Storage::url($attendance->check_out_photo) . '" class="img-fluid rounded" style="max-height: 200px;">
+                    <img src="' . Storage::url($attendance->check_out_photo) . '" class="rounded img-fluid" style="max-height: 200px;">
                 </div>
             </div>';
         }

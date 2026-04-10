@@ -22,16 +22,11 @@ class WorkSchedule extends Model
     ];
 
     protected $casts = [
-        'check_in_start' => 'datetime:H:i:s',
-        'check_in_end' => 'datetime:H:i:s',
-        'check_out_start' => 'datetime:H:i:s',
-        'check_out_end' => 'datetime:H:i:s',
         'is_working_day' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
 
-    // Day mapping
     public static $days = [
         'monday' => 'Senin',
         'tuesday' => 'Selasa',
@@ -42,18 +37,6 @@ class WorkSchedule extends Model
         'sunday' => 'Minggu'
     ];
 
-    // Scopes
-    public function scopeWorkingDay($query)
-    {
-        return $query->where('is_working_day', true);
-    }
-
-    public function scopeByDay($query, $day)
-    {
-        return $query->where('day_of_week', strtolower($day));
-    }
-
-    // Accessors
     public function getDayLabelAttribute()
     {
         return self::$days[$this->day_of_week] ?? ucfirst($this->day_of_week);
@@ -64,7 +47,10 @@ class WorkSchedule extends Model
         if (!$this->is_working_day) {
             return 'Libur';
         }
-        return $this->check_in_start->format('H:i') . ' - ' . $this->check_in_end->format('H:i');
+
+        $start = $this->check_in_start ? date('H:i', strtotime($this->check_in_start)) : '00:00';
+        $end = $this->check_in_end ? date('H:i', strtotime($this->check_in_end)) : '00:00';
+        return $start . ' - ' . $end;
     }
 
     public function getCheckOutWindowAttribute()
@@ -72,7 +58,10 @@ class WorkSchedule extends Model
         if (!$this->is_working_day) {
             return 'Libur';
         }
-        return $this->check_out_start->format('H:i') . ' - ' . $this->check_out_end->format('H:i');
+
+        $start = $this->check_out_start ? date('H:i', strtotime($this->check_out_start)) : '00:00';
+        $end = $this->check_out_end ? date('H:i', strtotime($this->check_out_end)) : '00:00';
+        return $start . ' - ' . $end;
     }
 
     public function getWorkingHoursAttribute()
@@ -81,93 +70,34 @@ class WorkSchedule extends Model
             return 'Libur';
         }
 
+        if (!$this->check_in_start || !$this->check_out_end) {
+            return '-';
+        }
+
         $start = Carbon::parse($this->check_in_start);
         $end = Carbon::parse($this->check_out_end);
         $diff = $start->diff($end);
-
-        return $diff->format('%H jam %i menit');
+        return $diff->format('%h jam %i menit');
     }
 
-    public function getStatusBadgeAttribute()
-    {
-        return $this->is_working_day ? 'success' : 'secondary';
-    }
-
-    public function getStatusTextAttribute()
-    {
-        return $this->is_working_day ? 'Hari Kerja' : 'Libur';
-    }
-
-    // Check if current time is within check-in window
-    public function isCheckInTime($time = null)
-    {
-        if (!$this->is_working_day) {
-            return false;
-        }
-
-        $time = $time ? Carbon::parse($time) : Carbon::now();
-        $checkInStart = Carbon::parse($this->check_in_start);
-        $checkInEnd = Carbon::parse($this->check_in_end);
-
-        return $time->between($checkInStart, $checkInEnd);
-    }
-
-    // Check if current time is within check-out window
-    public function isCheckOutTime($time = null)
-    {
-        if (!$this->is_working_day) {
-            return false;
-        }
-
-        $time = $time ? Carbon::parse($time) : Carbon::now();
-        $checkOutStart = Carbon::parse($this->check_out_start);
-        $checkOutEnd = Carbon::parse($this->check_out_end);
-
-        return $time->between($checkOutStart, $checkOutEnd);
-    }
-
-    // Get late minutes
-    public function getLateMinutes($checkInTime)
-    {
-        if (!$this->is_working_day) {
-            return 0;
-        }
-
-        $checkIn = Carbon::parse($checkInTime);
-        $checkInEnd = Carbon::parse($this->check_in_end);
-
-        if ($checkIn > $checkInEnd) {
-            return $checkIn->diffInMinutes($checkInEnd);
-        }
-
-        return 0;
-    }
-
-    // Get early checkout minutes
-    public function getEarlyCheckoutMinutes($checkOutTime)
-    {
-        if (!$this->is_working_day) {
-            return 0;
-        }
-
-        $checkOut = Carbon::parse($checkOutTime);
-        $checkOutStart = Carbon::parse($this->check_out_start);
-
-        if ($checkOut < $checkOutStart) {
-            return $checkOutStart->diffInMinutes($checkOut);
-        }
-
-        return 0;
-    }
-
-    // Get schedule for today
     public static function getTodaySchedule()
     {
         $today = strtolower(now()->format('l'));
-        return self::where('day_of_week', $today)->first();
+        $schedule = self::where('day_of_week', $today)->first();
+
+        // Jika tidak ada schedule, buat default
+        if (!$schedule) {
+            $schedule = new self();
+            $schedule->is_working_day = true;
+            $schedule->check_in_start = '08:00:00';
+            $schedule->check_in_end = '16:00:00';
+            $schedule->check_out_start = '17:00:00';
+            $schedule->check_out_end = '18:00:00';
+        }
+
+        return $schedule;
     }
 
-    // Get schedule for specific date
     public static function getScheduleByDate($date)
     {
         $day = strtolower(Carbon::parse($date)->format('l'));

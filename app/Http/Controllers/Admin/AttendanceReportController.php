@@ -6,130 +6,266 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\User;
 use App\Models\WorkLocation;
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class AttendanceReportController extends Controller
 {
     public function index(Request $request)
     {
-        // Get filter values
-        $startDate = $request->filled('start_date') ? $request->start_date : now()->startOfMonth()->format('Y-m-d');
-        $endDate = $request->filled('end_date') ? $request->end_date : now()->format('Y-m-d');
-        $userId = $request->filled('user_id') ? $request->user_id : null;
-        $status = $request->filled('status') ? $request->status : null;
+        $query = Attendance::with('user');
 
-        // Build query
-        $query = Attendance::with('user')
-            ->whereBetween('attendance_date', [$startDate, $endDate]);
+        // Set default values
+        $startDate = $request->filled('start_date') ? $request->start_date : Carbon::now()->startOfMonth()->format('Y-m-d');
+        $endDate = $request->filled('end_date') ? $request->end_date : Carbon::now()->format('Y-m-d');
 
-        if ($userId) {
-            $query->where('user_id', $userId);
+        if ($request->filled('start_date')) {
+            $query->where('attendance_date', '>=', $request->start_date);
         }
 
-        if ($status) {
-            $query->where('status', $status);
+        if ($request->filled('end_date')) {
+            $query->where('attendance_date', '<=', $request->end_date);
+        }
+
+        if ($request->filled('user_id')) {
+            $query->where('user_id', $request->user_id);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
         }
 
         $attendances = $query->orderBy('attendance_date', 'desc')
             ->orderBy('check_in_time', 'desc')
-            ->paginate(20)
-            ->appends($request->all());
+            ->paginate(20);
 
-        // Get summary statistics
-        $summaryQuery = Attendance::whereBetween('attendance_date', [$startDate, $endDate]);
-        if ($userId) {
-            $summaryQuery->where('user_id', $userId);
-        }
+        $users = User::where('role', 'employee')->orderBy('name')->get();
 
-        $summary = [
-            'total' => (clone $summaryQuery)->count(),
-            'present' => (clone $summaryQuery)->where('status', 'present')->count(),
-            'late' => (clone $summaryQuery)->where('status', 'late')->count(),
-            'absent' => (clone $summaryQuery)->where('status', 'absent')->count(),
-            'half_day' => (clone $summaryQuery)->where('status', 'half_day')->count(),
-            'total_late_minutes' => (clone $summaryQuery)->sum('late_minutes'),
-            'average_check_in' => (clone $summaryQuery)->avg(DB::raw("TIME_TO_SEC(check_in_time)"))
-                ? date('H:i:s', (clone $summaryQuery)->avg(DB::raw("TIME_TO_SEC(check_in_time)")))
-                : '00:00:00',
-        ];
-
-        // Get daily statistics for chart
-        $dailyStats = Attendance::select(
-            DB::raw('DATE(attendance_date) as date'),
-            DB::raw('COUNT(*) as total'),
-            DB::raw('SUM(CASE WHEN status = "present" THEN 1 ELSE 0 END) as present'),
-            DB::raw('SUM(CASE WHEN status = "late" THEN 1 ELSE 0 END) as late'),
-            DB::raw('SUM(CASE WHEN status = "absent" THEN 1 ELSE 0 END) as absent')
-        )
-            ->whereBetween('attendance_date', [$startDate, $endDate])
-            ->when($userId, function ($q) use ($userId) {
-                return $q->where('user_id', $userId);
-            })
-            ->groupBy('date')
-            ->orderBy('date', 'asc')
-            ->get();
-
-        // Get users for filter
-        $users = User::where('role', 'employee')
-            ->orderBy('name')
-            ->get();
-
-        // Get status counts for pie chart
-        $statusCounts = [
-            'labels' => ['Hadir', 'Terlambat', 'Tidak Hadir', 'Setengah Hari'],
-            'data' => [
-                $summary['present'],
-                $summary['late'],
-                $summary['absent'],
-                $summary['half_day']
-            ],
-            'colors' => ['#06d6a0', '#ffd166', '#ef476f', '#118ab2']
-        ];
+        // Statistics
+        $totalAttendance = Attendance::count();
+        $totalPresent = Attendance::where('status', 'present')->count();
+        $totalLate = Attendance::where('status', 'late')->count();
+        $totalAbsent = Attendance::where('status', 'absent')->count();
 
         return view('admin.reports.attendance', compact(
             'attendances',
-            'summary',
-            'dailyStats',
             'users',
             'startDate',
             'endDate',
-            'userId',
-            'status',
-            'statusCounts'
+            'totalAttendance',
+            'totalPresent',
+            'totalLate',
+            'totalAbsent'
         ));
+    }
+
+    public function edit($id)
+    {
+        $attendance = Attendance::with('user')->findOrFail($id);
+        $users = User::where('role', 'employee')->orderBy('name')->get();
+        $workLocation = WorkLocation::where('is_active', true)->first();
+
+        return view('admin.reports.edit', compact('attendance', 'users', 'workLocation'));
+    }
+
+    public function update(Request $request, $id)
+    {
+        $attendance = Attendance::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'user_id' => 'required|exists:users,id',
+            'attendance_date' => 'required|date',
+            'check_in_time' => 'nullable|date_format:H:i',
+            'check_out_time' => 'nullable|date_format:H:i|after:check_in_time',
+            'status' => 'required|in:present,late,absent,half_day',
+            'late_minutes' => 'nullable|integer|min:0',
+            'check_in_latitude' => 'nullable|numeric|between:-90,90',
+            'check_in_longitude' => 'nullable|numeric|between:-180,180',
+            'check_out_latitude' => 'nullable|numeric|between:-90,90',
+            'check_out_longitude' => 'nullable|numeric|between:-180,180',
+            'notes' => 'nullable|string|max:500',
+        ], [
+            'check_out_time.after' => 'Waktu check out harus setelah waktu check in',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()->withErrors($validator)->withInput();
+        }
+
+        $oldData = $attendance->toArray();
+
+        // Calculate late minutes if needed
+        $lateMinutes = $request->late_minutes ?? 0;
+        if ($request->status == 'late' && $request->check_in_time && $lateMinutes == 0) {
+            $schedule = \App\Models\WorkSchedule::getScheduleByDate($request->attendance_date);
+            if ($schedule && $schedule->is_working_day) {
+                $checkInEnd = Carbon::parse($schedule->check_in_end);
+                $checkInTime = Carbon::parse($request->check_in_time);
+                if ($checkInTime > $checkInEnd) {
+                    $lateMinutes = $checkInTime->diffInMinutes($checkInEnd);
+                }
+            }
+        }
+
+        $notes = $request->notes;
+        if ($oldData['notes'] != $notes && $notes) {
+            $notes = "[ADMIN EDIT] " . $notes . "\n\nSebelumnya: " . ($oldData['notes'] ?? '-');
+        }
+
+        $attendance->update([
+            'user_id' => $request->user_id,
+            'attendance_date' => $request->attendance_date,
+            'check_in_time' => $request->check_in_time,
+            'check_out_time' => $request->check_out_time,
+            'check_in_latitude' => $request->check_in_latitude ?? 0,
+            'check_in_longitude' => $request->check_in_longitude ?? 0,
+            'check_out_latitude' => $request->check_out_latitude ?? 0,
+            'check_out_longitude' => $request->check_out_longitude ?? 0,
+            'status' => $request->status,
+            'late_minutes' => $lateMinutes,
+            'notes' => $notes,
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+        ]);
+
+        // Log activity
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'admin_edit_attendance',
+            'description' => "Mengedit absensi milik {$attendance->user->name} tanggal " . Carbon::parse($request->attendance_date)->format('d/m/Y'),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'old_data' => json_encode($oldData),
+            'new_data' => json_encode($attendance->toArray()),
+        ]);
+
+        return redirect()->route('admin.reports.attendance')
+            ->with('success', 'Absensi berhasil diperbarui!');
+    }
+
+    public function destroy($id)
+    {
+        $attendance = Attendance::findOrFail($id);
+        $attendanceName = $attendance->user->name;
+        $attendanceDate = $attendance->attendance_date->format('d/m/Y');
+
+        $attendance->delete();
+
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'admin_delete_attendance',
+            'description' => "Menghapus absensi milik {$attendanceName} tanggal {$attendanceDate}",
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+        ]);
+
+        return redirect()->route('admin.reports.attendance')
+            ->with('success', 'Absensi berhasil dihapus!');
+    }
+
+    public function create()
+    {
+        $users = User::where('role', 'employee')->orderBy('name')->get();
+        $workLocation = WorkLocation::where('is_active', true)->first();
+
+        return view('admin.reports.create', compact('users', 'workLocation'));
+    }
+
+    public function store(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'user_id' => 'required|exists:users,id',
+            'attendance_date' => 'required|date',
+            'check_in_time' => 'nullable|date_format:H:i',
+            'check_out_time' => 'nullable|date_format:H:i|after:check_in_time',
+            'status' => 'required|in:present,late,absent,half_day',
+            'late_minutes' => 'nullable|integer|min:0',
+            'check_in_latitude' => 'nullable|numeric|between:-90,90',
+            'check_in_longitude' => 'nullable|numeric|between:-180,180',
+            'check_out_latitude' => 'nullable|numeric|between:-90,90',
+            'check_out_longitude' => 'nullable|numeric|between:-180,180',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()->withErrors($validator)->withInput();
+        }
+
+        // Check if attendance already exists
+        $existing = Attendance::where('user_id', $request->user_id)
+            ->whereDate('attendance_date', $request->attendance_date)
+            ->first();
+
+        if ($existing) {
+            return redirect()->back()->with('error', 'Absensi untuk tanggal tersebut sudah ada!');
+        }
+
+        // Calculate late minutes
+        $lateMinutes = $request->late_minutes ?? 0;
+        if ($request->status == 'late' && $request->check_in_time && $lateMinutes == 0) {
+            $schedule = \App\Models\WorkSchedule::getScheduleByDate($request->attendance_date);
+            if ($schedule && $schedule->is_working_day) {
+                $checkInEnd = Carbon::parse($schedule->check_in_end);
+                $checkInTime = Carbon::parse($request->check_in_time);
+                if ($checkInTime > $checkInEnd) {
+                    $lateMinutes = $checkInTime->diffInMinutes($checkInEnd);
+                }
+            }
+        }
+
+        $attendance = Attendance::create([
+            'user_id' => $request->user_id,
+            'attendance_date' => $request->attendance_date,
+            'check_in_time' => $request->check_in_time,
+            'check_out_time' => $request->check_out_time,
+            'check_in_latitude' => $request->check_in_latitude ?? 0,
+            'check_in_longitude' => $request->check_in_longitude ?? 0,
+            'check_out_latitude' => $request->check_out_latitude ?? 0,
+            'check_out_longitude' => $request->check_out_longitude ?? 0,
+            'status' => $request->status,
+            'late_minutes' => $lateMinutes,
+            'notes' => "[ADMIN INPUT] " . ($request->notes ?? ''),
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+        ]);
+
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'admin_create_attendance',
+            'description' => "Membuat absensi baru untuk {$attendance->user->name} tanggal " . Carbon::parse($request->attendance_date)->format('d/m/Y'),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return redirect()->route('admin.reports.attendance')
+            ->with('success', 'Absensi berhasil ditambahkan!');
     }
 
     public function export(Request $request)
     {
-        $startDate = $request->filled('start_date') ? $request->start_date : now()->startOfMonth()->format('Y-m-d');
-        $endDate = $request->filled('end_date') ? $request->end_date : now()->format('Y-m-d');
-        $userId = $request->filled('user_id') ? $request->user_id : null;
-        $status = $request->filled('status') ? $request->status : null;
+        $query = Attendance::with('user');
 
-        $query = Attendance::with('user')
-            ->whereBetween('attendance_date', [$startDate, $endDate]);
-
-        if ($userId) {
-            $query->where('user_id', $userId);
+        if ($request->filled('start_date')) {
+            $query->where('attendance_date', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->where('attendance_date', '<=', $request->end_date);
+        }
+        if ($request->filled('user_id')) {
+            $query->where('user_id', $request->user_id);
         }
 
-        if ($status) {
-            $query->where('status', $status);
-        }
+        $attendances = $query->orderBy('attendance_date', 'desc')->get();
 
-        $attendances = $query->orderBy('attendance_date', 'desc')
-            ->orderBy('check_in_time', 'desc')
-            ->get();
-
-        $filename = "attendance_report_{$startDate}_to_{$endDate}.csv";
+        $filename = "absensi_" . now()->format('Y-m-d_H-i-s') . ".csv";
 
         $handle = fopen('php://temp', 'w');
-
-        // Add UTF-8 BOM for Excel compatibility
         fwrite($handle, "\xEF\xBB\xBF");
 
-        // Headers
         fputcsv($handle, [
             'No',
             'Tanggal',
@@ -139,34 +275,29 @@ class AttendanceReportController extends Controller
             'Check In',
             'Check Out',
             'Status',
-            'Terlambat (menit)',
-            'Durasi Kerja',
-            'Catatan'
+            'Terlambat',
+            'Koordinat In',
+            'Koordinat Out',
+            'Catatan',
+            'Status Validasi'
         ]);
 
-        // Data
         $no = 1;
         foreach ($attendances as $attendance) {
-            $duration = '';
-            if ($attendance->check_in_time && $attendance->check_out_time) {
-                $checkIn = strtotime($attendance->check_in_time);
-                $checkOut = strtotime($attendance->check_out_time);
-                $diff = $checkOut - $checkIn;
-                $duration = gmdate('H:i', $diff);
-            }
-
             fputcsv($handle, [
                 $no++,
                 $attendance->attendance_date->format('d/m/Y'),
                 $attendance->user->name,
                 $attendance->user->employee_id ?? '-',
                 $attendance->user->department ?? '-',
-                $attendance->check_in_time,
+                $attendance->check_in_time ?? '-',
                 $attendance->check_out_time ?? '-',
                 $this->getStatusText($attendance->status),
-                $attendance->late_minutes,
-                $duration,
-                $attendance->notes ?? '-'
+                $attendance->late_minutes . ' menit',
+                $attendance->check_in_latitude ? number_format($attendance->check_in_latitude, 6) . ', ' . number_format($attendance->check_in_longitude, 6) : '-',
+                $attendance->check_out_latitude ? number_format($attendance->check_out_latitude, 6) . ', ' . number_format($attendance->check_out_longitude, 6) : '-',
+                $attendance->notes ?? '-',
+                $attendance->approved_by ? 'Sudah' : 'Belum',
             ]);
         }
 
@@ -180,35 +311,6 @@ class AttendanceReportController extends Controller
         ]);
     }
 
-    public function exportPdf(Request $request)
-    {
-        // This would require a PDF package like barryvdh/laravel-dompdf
-        // For now, we'll redirect back
-        return redirect()->back()->with('info', 'Fitur PDF akan segera tersedia');
-    }
-
-    public function print(Request $request)
-    {
-        $startDate = $request->filled('start_date') ? $request->start_date : now()->startOfMonth()->format('Y-m-d');
-        $endDate = $request->filled('end_date') ? $request->end_date : now()->format('Y-m-d');
-        $userId = $request->filled('user_id') ? $request->user_id : null;
-
-        $query = Attendance::with('user')
-            ->whereBetween('attendance_date', [$startDate, $endDate]);
-
-        if ($userId) {
-            $query->where('user_id', $userId);
-        }
-
-        $attendances = $query->orderBy('attendance_date', 'desc')
-            ->orderBy('check_in_time', 'desc')
-            ->get();
-
-        $selectedUser = $userId ? User::find($userId) : null;
-
-        return view('admin.reports.print', compact('attendances', 'startDate', 'endDate', 'selectedUser'));
-    }
-
     private function getStatusText($status)
     {
         $statuses = [
@@ -217,7 +319,6 @@ class AttendanceReportController extends Controller
             'absent' => 'Tidak Hadir',
             'half_day' => 'Setengah Hari'
         ];
-
         return $statuses[$status] ?? $status;
     }
 }
