@@ -14,12 +14,12 @@
                         <h5 class="mb-2">
                             <i class="fas fa-calendar-day"></i> Jadwal Hari Ini - {{ now()->format('l, d F Y') }}
                         </h5>
-                        @if($todaySchedule && $todaySchedule->is_working_day)
+                        @if(isset($todaySchedule) && $todaySchedule && $todaySchedule->is_working_day)
                             <h3 class="mb-2">Hari Kerja</h3>
                             <p class="mb-0">
                                 <i class="fas fa-clock"></i>
-                                Check In: {{ $todaySchedule->check_in_window }} |
-                                Check Out: {{ $todaySchedule->check_out_window }}
+                                Check In: {{ $todaySchedule->check_in_window ?? 'Belum diatur' }} |
+                                Check Out: {{ $todaySchedule->check_out_window ?? 'Belum diatur' }}
                             </p>
                         @else
                             <h3 class="mb-2">Hari Libur</h3>
@@ -44,11 +44,7 @@
                     <h5 class="mb-0">
                         <i class="fas fa-calendar-week"></i> Daftar Jadwal Kerja
                     </h5>
-                    <div>
-                        <button onclick="resetSchedule()" class="btn btn-warning">
-                            <i class="fas fa-undo-alt"></i> Reset ke Default
-                        </button>
-                    </div>
+                    <!-- TOMBOL RESET DIHAPUS -->
                 </div>
             </div>
         </div>
@@ -142,37 +138,4 @@
         </div>
     </div>
 </div>
-
-<!-- Reset Confirmation Modal -->
-<div class="modal fade" id="resetModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header" style="background: linear-gradient(135deg, #ffc107, #e6b800); color: #000;">
-                <h5 class="modal-title">
-                    <i class="fas fa-exclamation-triangle"></i> Konfirmasi Reset
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Apakah Anda yakin ingin mereset semua jadwal kerja ke default?</p>
-                <p class="mb-0 text-warning">Semua perubahan yang telah dibuat akan hilang!</p>
-            </div>
-            <div class="modal-footer">
-                <form id="resetForm" method="POST" action="{{ route('admin.schedules.reset') }}">
-                    @csrf
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-warning">Ya, Reset</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
 @endsection
-
-@push('scripts')
-<script>
-function resetSchedule() {
-    new bootstrap.Modal(document.getElementById('resetModal')).show();
-}
-</script>
-@endpush

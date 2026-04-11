@@ -24,17 +24,20 @@ class WorkScheduleController extends Controller
 
     public function edit($day)
     {
+        // Ambil data dari database, jangan pakai cache
+        \Illuminate\Support\Facades\Cache::forget('work_schedule_' . $day);
+
         $schedule = WorkSchedule::where('day_of_week', $day)->first();
 
-        // Jika tidak ada, buat baru
+        // Jika tidak ada, buat baru dengan default
         if (!$schedule) {
             $schedule = new WorkSchedule();
             $schedule->day_of_week = $day;
             $schedule->is_working_day = true;
             $schedule->check_in_start = '08:00:00';
-            $schedule->check_in_end = '20:00:00';
+            $schedule->check_in_end = '12:00:00';
             $schedule->check_out_start = '17:00:00';
-            $schedule->check_out_end = '23:00:00';
+            $schedule->check_out_end = '18:00:00';
         }
 
         $dayLabel = WorkSchedule::$days[$day] ?? ucfirst($day);
@@ -44,13 +47,7 @@ class WorkScheduleController extends Controller
 
     public function update(Request $request, $day)
     {
-        $schedule = WorkSchedule::where('day_of_week', $day)->first();
-
-        if (!$schedule) {
-            $schedule = new WorkSchedule();
-            $schedule->day_of_week = $day;
-        }
-
+        // Validasi input
         $validator = Validator::make($request->all(), [
             'is_working_day' => 'boolean',
             'check_in_start' => 'nullable|date_format:H:i',
@@ -63,18 +60,25 @@ class WorkScheduleController extends Controller
             return redirect()->back()->withErrors($validator)->withInput();
         }
 
+        // Cari atau buat baru
+        $schedule = WorkSchedule::where('day_of_week', $day)->first();
+
+        if (!$schedule) {
+            $schedule = new WorkSchedule();
+            $schedule->day_of_week = $day;
+        }
+
         $oldData = $schedule->toArray();
 
+        // Update data
         $schedule->is_working_day = $request->has('is_working_day');
 
         if ($request->has('is_working_day') && $request->is_working_day == 1) {
-            // Set default values jika kosong
             $schedule->check_in_start = $request->check_in_start ?: '08:00:00';
-            $schedule->check_in_end = $request->check_in_end ?: '20:00:00';
+            $schedule->check_in_end = $request->check_in_end ?: '12:00:00';
             $schedule->check_out_start = $request->check_out_start ?: '17:00:00';
-            $schedule->check_out_end = $request->check_out_end ?: '23:00:00';
+            $schedule->check_out_end = $request->check_out_end ?: '18:00:00';
         } else {
-            // Untuk hari libur, set ke null
             $schedule->check_in_start = null;
             $schedule->check_in_end = null;
             $schedule->check_out_start = null;
@@ -83,6 +87,11 @@ class WorkScheduleController extends Controller
 
         $schedule->save();
 
+        // Hapus cache setelah update
+        \Illuminate\Support\Facades\Cache::forget('work_schedule_' . $day);
+        \Illuminate\Support\Facades\Cache::forget('work_schedule_today');
+
+        // Log aktivitas
         ActivityLog::create([
             'user_id' => Auth::id(),
             'action' => 'update_schedule',
@@ -99,30 +108,28 @@ class WorkScheduleController extends Controller
 
     public function reset()
     {
-        try {
-            // Hapus semua data
-            WorkSchedule::truncate();
+        // Hapus semua data
+        WorkSchedule::truncate();
 
-            // Insert default schedules
-            $defaultSchedules = [
-                ['day_of_week' => 'monday', 'check_in_start' => '08:00:00', 'check_in_end' => '20:00:00', 'check_out_start' => '17:00:00', 'check_out_end' => '23:00:00', 'is_working_day' => true],
-                ['day_of_week' => 'tuesday', 'check_in_start' => '08:00:00', 'check_in_end' => '20:00:00', 'check_out_start' => '17:00:00', 'check_out_end' => '23:00:00', 'is_working_day' => true],
-                ['day_of_week' => 'wednesday', 'check_in_start' => '08:00:00', 'check_in_end' => '20:00:00', 'check_out_start' => '17:00:00', 'check_out_end' => '23:00:00', 'is_working_day' => true],
-                ['day_of_week' => 'thursday', 'check_in_start' => '08:00:00', 'check_in_end' => '20:00:00', 'check_out_start' => '17:00:00', 'check_out_end' => '23:00:00', 'is_working_day' => true],
-                ['day_of_week' => 'friday', 'check_in_start' => '08:00:00', 'check_in_end' => '20:00:00', 'check_out_start' => '17:00:00', 'check_out_end' => '23:00:00', 'is_working_day' => true],
-                ['day_of_week' => 'saturday', 'check_in_start' => '08:00:00', 'check_in_end' => '12:00:00', 'check_out_start' => '12:00:00', 'check_out_end' => '13:00:00', 'is_working_day' => false],
-                ['day_of_week' => 'sunday', 'check_in_start' => null, 'check_in_end' => null, 'check_out_start' => null, 'check_out_end' => null, 'is_working_day' => false],
-            ];
+        // Hapus semua cache
+        \Illuminate\Support\Facades\Cache::flush();
 
-            foreach ($defaultSchedules as $schedule) {
-                WorkSchedule::create($schedule);
-            }
+        // Insert default schedules
+        $defaultSchedules = [
+            ['day_of_week' => 'monday', 'check_in_start' => '08:00:00', 'check_in_end' => '12:00:00', 'check_out_start' => '17:00:00', 'check_out_end' => '18:00:00', 'is_working_day' => true],
+            ['day_of_week' => 'tuesday', 'check_in_start' => '08:00:00', 'check_in_end' => '12:00:00', 'check_out_start' => '17:00:00', 'check_out_end' => '18:00:00', 'is_working_day' => true],
+            ['day_of_week' => 'wednesday', 'check_in_start' => '08:00:00', 'check_in_end' => '12:00:00', 'check_out_start' => '17:00:00', 'check_out_end' => '18:00:00', 'is_working_day' => true],
+            ['day_of_week' => 'thursday', 'check_in_start' => '08:00:00', 'check_in_end' => '12:00:00', 'check_out_start' => '17:00:00', 'check_out_end' => '18:00:00', 'is_working_day' => true],
+            ['day_of_week' => 'friday', 'check_in_start' => '08:00:00', 'check_in_end' => '12:00:00', 'check_out_start' => '17:00:00', 'check_out_end' => '18:00:00', 'is_working_day' => true],
+            ['day_of_week' => 'saturday', 'check_in_start' => '08:00:00', 'check_in_end' => '12:00:00', 'check_out_start' => '12:00:00', 'check_out_end' => '13:00:00', 'is_working_day' => false],
+            ['day_of_week' => 'sunday', 'check_in_start' => null, 'check_in_end' => null, 'check_out_start' => null, 'check_out_end' => null, 'is_working_day' => false],
+        ];
 
-            return redirect()->route('admin.schedules.index')
-                ->with('success', 'Jadwal kerja berhasil direset ke default!');
-        } catch (\Exception $e) {
-            return redirect()->route('admin.schedules.index')
-                ->with('error', 'Gagal reset jadwal: ' . $e->getMessage());
+        foreach ($defaultSchedules as $schedule) {
+            WorkSchedule::create($schedule);
         }
+
+        return redirect()->route('admin.schedules.index')
+            ->with('success', 'Jadwal kerja berhasil direset ke default!');
     }
 }

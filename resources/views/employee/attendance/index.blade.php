@@ -4,29 +4,6 @@
 @section('page-title', 'Absensi Hari Ini')
 
 @section('content')
-
-
-@if(auth()->user()->isAdmin() && isset($debugInfo))
-<div class="mt-3 row">
-    <div class="col-12">
-        <div class="alert alert-info">
-            <h6><i class="fas fa-bug"></i> Debug Info (Hanya Admin)</h6>
-            <ul class="mb-0 small">
-                <li>Waktu Saat Ini: <strong>{{ $debugInfo['current_time'] }}</strong></li>
-                <li>Schedule Ada: {{ $debugInfo['schedule_exists'] ? 'Ya' : 'Tidak' }}</li>
-                @if($debugInfo['schedule_data'])
-                    <li>Hari Kerja: {{ $debugInfo['schedule_data']['is_working_day'] ? 'Ya' : 'Tidak' }}</li>
-                    <li>Waktu Check In: {{ $debugInfo['schedule_data']['check_in_start'] }} - {{ $debugInfo['schedule_data']['check_in_end'] }}</li>
-                    <li>Waktu Check Out: {{ $debugInfo['schedule_data']['check_out_start'] }} - {{ $debugInfo['schedule_data']['check_out_end'] }}</li>
-                @endif
-                <li>Bisa Check In: {{ $debugInfo['can_check_in'] ? 'Ya' : 'Tidak' }}</li>
-                <li>Bisa Check Out: {{ $debugInfo['can_check_out'] ? 'Ya' : 'Tidak' }}</li>
-                <li>Sudah Absen Hari Ini: {{ $debugInfo['has_attendance_today'] ? 'Ya' : 'Tidak' }}</li>
-            </ul>
-        </div>
-    </div>
-</div>
-@endif
 <div class="container-fluid fade-in-up">
     <!-- Welcome Card -->
     <div class="row">
@@ -67,10 +44,16 @@
     <div class="col-12">
         <div class="alert alert-info">
             <i class="fas fa-clock"></i>
-            <strong>Jadwal Hari Ini (Testing Mode):</strong>
-            Check In: {{ $checkInWindow ?? '08:00 - 20:00' }} |
-            Check Out: {{ $checkOutWindow ?? '17:00 - 23:00' }} |
-            Durasi Kerja: {{ $workingHours ?? '12 jam' }}
+            <strong>Jadwal Hari Ini:</strong>
+            @if(isset($schedule) && $schedule && $schedule->is_working_day)
+                Check In: Mulai jam {{ date('H:i', strtotime($schedule->check_in_start)) }}
+                @if($schedule->check_in_end)
+                    (Terlambat setelah {{ date('H:i', strtotime($schedule->check_in_end)) }})
+                @endif
+                | Check Out: Mulai jam {{ date('H:i', strtotime($schedule->check_out_start)) }}
+            @else
+                Hari Libur / Tidak ada jadwal kerja
+            @endif
         </div>
     </div>
 </div>
@@ -92,6 +75,13 @@
                         @else
                             <span class="badge bg-success">Tepat Waktu</span>
                         @endif
+                        @if($todayAttendance->check_in_photo)
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-info" onclick="showPhoto('{{ Storage::url($todayAttendance->check_in_photo) }}', 'Foto Check In')">
+                                    <i class="fas fa-camera"></i> Lihat Foto
+                                </button>
+                            </div>
+                        @endif
                     </div>
                 @else
                     <div class="mb-3">
@@ -108,7 +98,7 @@
                             <p class="text-muted">Hari libur, tidak perlu check in</p>
                         @else
                             <p class="text-muted">Belum waktunya check in atau sudah melewati batas waktu</p>
-                            <small class="text-muted">Waktu check in: {{ isset($schedule) && $schedule ? $schedule->check_in_window : 'Belum diatur' }}</small>
+                            <small class="text-muted">Waktu check in: {{ $checkInWindow ?? 'Belum diatur' }}</small>
                         @endif
                     </div>
                 @endif
@@ -128,6 +118,13 @@
                         @if($todayAttendance->early_checkout_minutes > 0)
                             <span class="badge bg-warning">Pulang awal {{ $todayAttendance->early_checkout_minutes }} menit</span>
                         @endif
+                        @if($todayAttendance->check_out_photo)
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-info" onclick="showPhoto('{{ Storage::url($todayAttendance->check_out_photo) }}', 'Foto Check Out')">
+                                    <i class="fas fa-camera"></i> Lihat Foto
+                                </button>
+                            </div>
+                        @endif
                     </div>
                 @elseif(isset($todayAttendance) && $todayAttendance && $todayAttendance->check_in_time && !$todayAttendance->check_out_time)
                     <div class="mb-3">
@@ -142,7 +139,7 @@
                             </button>
                         @else
                             <p class="text-muted">Belum waktunya check out</p>
-                            <small class="text-muted">Waktu check out: {{ isset($schedule) && $schedule ? $schedule->check_out_window : 'Belum diatur' }}</small>
+                            <small class="text-muted">Waktu check out: {{ $checkOutWindow ?? 'Belum diatur' }}</small>
                         @endif
                     </div>
                 @else
@@ -158,50 +155,50 @@
         </div>
     </div>
 
-   <!-- Monthly Statistics -->
-<div class="mt-4 row">
-    <div class="col-12">
-        <div class="stat-card">
-            <h5 class="mb-3">
-                <i class="fas fa-chart-line text-primary"></i> Statistik Bulan {{ \Carbon\Carbon::now()->format('F Y') }}
-            </h5>
-            <div class="row">
-                <div class="col-md-3">
-                    <div class="p-3 text-center border rounded">
-                        <h3 class="text-primary">{{ $monthStats->total ?? 0 }}</h3>
-                        <p class="mb-0 text-muted">Total Kehadiran</p>
+    <!-- Monthly Statistics -->
+    <div class="mt-4 row">
+        <div class="col-12">
+            <div class="stat-card">
+                <h5 class="mb-3">
+                    <i class="fas fa-chart-line text-primary"></i> Statistik Bulan {{ \Carbon\Carbon::now()->format('F Y') }}
+                </h5>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="p-3 text-center border rounded">
+                            <h3 class="text-primary">{{ isset($monthStats) ? $monthStats->total ?? 0 : 0 }}</h3>
+                            <p class="mb-0 text-muted">Total Kehadiran</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 text-center border rounded">
+                            <h3 class="text-success">{{ isset($monthStats) ? $monthStats->present ?? 0 : 0 }}</h3>
+                            <p class="mb-0 text-muted">Tepat Waktu</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 text-center border rounded">
+                            <h3 class="text-warning">{{ isset($monthStats) ? $monthStats->late ?? 0 : 0 }}</h3>
+                            <p class="mb-0 text-muted">Terlambat</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 text-center border rounded">
+                            <h3 class="text-danger">{{ isset($monthStats) ? $monthStats->absent ?? 0 : 0 }}</h3>
+                            <p class="mb-0 text-muted">Tidak Hadir</p>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="p-3 text-center border rounded">
-                        <h3 class="text-success">{{ $monthStats->present ?? 0 }}</h3>
-                        <p class="mb-0 text-muted">Tepat Waktu</p>
+                @if(isset($monthStats) && $monthStats->total_late_minutes > 0)
+                    <div class="mt-3 text-center">
+                        <small class="text-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Total keterlambatan: {{ floor($monthStats->total_late_minutes / 60) }} jam {{ $monthStats->total_late_minutes % 60 }} menit
+                        </small>
                     </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="p-3 text-center border rounded">
-                        <h3 class="text-warning">{{ $monthStats->late ?? 0 }}</h3>
-                        <p class="mb-0 text-muted">Terlambat</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="p-3 text-center border rounded">
-                        <h3 class="text-danger">{{ $monthStats->absent ?? 0 }}</h3>
-                        <p class="mb-0 text-muted">Tidak Hadir</p>
-                    </div>
-                </div>
+                @endif
             </div>
-            @if(($monthStats->total_late_minutes ?? 0) > 0)
-                <div class="mt-3 text-center">
-                    <small class="text-warning">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        Total keterlambatan: {{ floor(($monthStats->total_late_minutes ?? 0) / 60) }} jam {{ ($monthStats->total_late_minutes ?? 0) % 60 }} menit
-                    </small>
-                </div>
-            @endif
         </div>
     </div>
-</div>
 
     <!-- Recent Attendances -->
     <div class="mt-4 row">
@@ -281,14 +278,12 @@
             <form action="{{ route('employee.attendance.check-in') }}" method="POST" enctype="multipart/form-data" id="checkInForm">
                 @csrf
                 <div class="modal-body">
-                    <!-- Tombol Ambil Lokasi -->
                     <div class="mb-3">
                         <button type="button" class="btn btn-primary w-100" id="getLocationBtn" onclick="getCurrentLocation()">
                             <i class="fas fa-map-marker-alt"></i> Ambil Lokasi Saat Ini
                         </button>
                     </div>
 
-                    <!-- Status Lokasi -->
                     <div id="locationStatus" class="alert alert-secondary" style="display: none;">
                         <i class="fas fa-info-circle"></i> <span id="locationText">Klik tombol di atas untuk mengambil lokasi</span>
                     </div>
@@ -298,7 +293,7 @@
 
                     <div class="mt-3 mb-3">
                         <label class="form-label">Foto Selfie (Opsional)</label>
-                        <input type="file" name="photo" class="form-control" accept="image/*">
+                        <input type="file" name="photo" class="form-control" accept="image/*" capture="environment">
                         <small class="text-muted">Ambil foto selfie untuk verifikasi</small>
                     </div>
 
@@ -331,14 +326,12 @@
             <form action="{{ route('employee.attendance.check-out') }}" method="POST" enctype="multipart/form-data" id="checkOutForm">
                 @csrf
                 <div class="modal-body">
-                    <!-- Tombol Ambil Lokasi -->
                     <div class="mb-3">
                         <button type="button" class="btn btn-primary w-100" id="getLocationOutBtn" onclick="getCurrentLocationForCheckOut()">
                             <i class="fas fa-map-marker-alt"></i> Ambil Lokasi Saat Ini
                         </button>
                     </div>
 
-                    <!-- Status Lokasi -->
                     <div id="locationStatusOut" class="alert alert-secondary" style="display: none;">
                         <i class="fas fa-info-circle"></i> <span id="locationTextOut">Klik tombol di atas untuk mengambil lokasi</span>
                     </div>
@@ -348,7 +341,7 @@
 
                     <div class="mt-3 mb-3">
                         <label class="form-label">Foto Selfie (Opsional)</label>
-                        <input type="file" name="photo" class="form-control" accept="image/*">
+                        <input type="file" name="photo" class="form-control" accept="image/*" capture="environment">
                         <small class="text-muted">Ambil foto selfie untuk verifikasi</small>
                     </div>
                 </div>
@@ -396,7 +389,6 @@ function getCurrentLocation() {
         return;
     }
 
-    // Tampilkan loading
     getLocationBtn.disabled = true;
     getLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mendapatkan lokasi...';
     locationStatus.style.display = 'block';
@@ -409,11 +401,9 @@ function getCurrentLocation() {
             const lng = position.coords.longitude;
             const accuracy = position.coords.accuracy;
 
-            // Set nilai ke input hidden
             document.getElementById('checkInLatitude').value = lat;
             document.getElementById('checkInLongitude').value = lng;
 
-            // Validasi ke server
             $.get('{{ route("employee.attendance.current-location") }}', {
                 latitude: lat,
                 longitude: lng
@@ -421,29 +411,23 @@ function getCurrentLocation() {
                 if (response.success) {
                     if (response.is_valid) {
                         locationStatus.className = 'alert alert-success';
-                        locationText.innerHTML = '<i class="fas fa-check-circle"></i> ✅ Lokasi valid! Anda berada di dalam radius kantor.<br>' +
-                            '<small>Lokasi: ' + response.location_name + '<br>' +
-                            'Jarak: ' + response.distance + ' meter (Akurasi: ' + Math.round(accuracy) + ' meter)</small>';
+                        locationText.innerHTML = '<i class="fas fa-check-circle"></i> Lokasi valid! Anda berada di dalam radius kantor.<br><small>Jarak: ' + response.distance + ' meter</small>';
                         submitBtn.disabled = false;
                     } else {
                         locationStatus.className = 'alert alert-danger';
-                        locationText.innerHTML = '<i class="fas fa-times-circle"></i> ❌ Anda berada di luar radius kantor!<br>' +
-                            '<small>Lokasi: ' + response.location_name + '<br>' +
-                            'Jarak: ' + response.distance + ' meter (Maksimal: ' + response.max_distance + ' meter)</small>';
+                        locationText.innerHTML = '<i class="fas fa-times-circle"></i> Anda berada di luar radius kantor!<br><small>Jarak: ' + response.distance + ' meter (Maksimal: ' + response.max_distance + ' meter)</small>';
                         submitBtn.disabled = true;
                     }
                 } else {
                     locationStatus.className = 'alert alert-danger';
-                    locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal validasi lokasi. Silakan coba lagi.';
+                    locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal validasi lokasi.';
                     submitBtn.disabled = true;
                 }
-
-                // Reset tombol
                 getLocationBtn.disabled = false;
                 getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Lagi';
             }).fail(function() {
                 locationStatus.className = 'alert alert-danger';
-                locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal koneksi ke server. Periksa koneksi internet.';
+                locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal koneksi ke server.';
                 submitBtn.disabled = true;
                 getLocationBtn.disabled = false;
                 getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Lagi';
@@ -452,32 +436,19 @@ function getCurrentLocation() {
         function(error) {
             let errorMessage = '';
             switch(error.code) {
-                case 1:
-                    errorMessage = 'Anda menolak akses lokasi. Silakan izinkan akses lokasi di browser.';
-                    break;
-                case 2:
-                    errorMessage = 'Tidak dapat mendeteksi lokasi. Pastikan GPS aktif dan sinyal cukup kuat.';
-                    break;
-                case 3:
-                    errorMessage = 'Timeout. Coba lagi dan pastikan koneksi stabil.';
-                    break;
-                default:
-                    errorMessage = error.message || 'Gagal mendapatkan lokasi.';
+                case 1: errorMessage = 'Izin lokasi ditolak. Silakan izinkan akses lokasi.'; break;
+                case 2: errorMessage = 'Tidak dapat mendeteksi lokasi. Pastikan GPS aktif.'; break;
+                case 3: errorMessage = 'Timeout. Coba lagi.'; break;
+                default: errorMessage = error.message || 'Gagal mendapatkan lokasi.';
             }
-
             locationStatus.style.display = 'block';
             locationStatus.className = 'alert alert-danger';
             locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + errorMessage;
             submitBtn.disabled = true;
-
             getLocationBtn.disabled = false;
             getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Lagi';
         },
-        {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-        }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
 }
 
@@ -491,12 +462,11 @@ function getCurrentLocationForCheckOut() {
     if (!navigator.geolocation) {
         locationStatus.style.display = 'block';
         locationStatus.className = 'alert alert-danger';
-        locationText.innerHTML = 'Browser tidak mendukung GPS. Silakan gunakan Chrome atau Firefox.';
+        locationText.innerHTML = 'Browser tidak mendukung GPS.';
         submitBtn.disabled = true;
         return;
     }
 
-    // Tampilkan loading
     getLocationBtn.disabled = true;
     getLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mendapatkan lokasi...';
     locationStatus.style.display = 'block';
@@ -507,13 +477,10 @@ function getCurrentLocationForCheckOut() {
         function(position) {
             const lat = position.coords.latitude;
             const lng = position.coords.longitude;
-            const accuracy = position.coords.accuracy;
 
-            // Set nilai ke input hidden
             document.getElementById('checkOutLatitude').value = lat;
             document.getElementById('checkOutLongitude').value = lng;
 
-            // Validasi ke server
             $.get('{{ route("employee.attendance.current-location") }}', {
                 latitude: lat,
                 longitude: lng
@@ -521,90 +488,57 @@ function getCurrentLocationForCheckOut() {
                 if (response.success) {
                     if (response.is_valid) {
                         locationStatus.className = 'alert alert-success';
-                        locationText.innerHTML = '<i class="fas fa-check-circle"></i> ✅ Lokasi valid! Anda berada di dalam radius kantor.<br>' +
-                            '<small>Lokasi: ' + response.location_name + '<br>' +
-                            'Jarak: ' + response.distance + ' meter (Akurasi: ' + Math.round(accuracy) + ' meter)</small>';
+                        locationText.innerHTML = '<i class="fas fa-check-circle"></i> Lokasi valid! Jarak: ' + response.distance + ' meter';
                         submitBtn.disabled = false;
                     } else {
                         locationStatus.className = 'alert alert-danger';
-                        locationText.innerHTML = '<i class="fas fa-times-circle"></i> ❌ Anda berada di luar radius kantor!<br>' +
-                            '<small>Lokasi: ' + response.location_name + '<br>' +
-                            'Jarak: ' + response.distance + ' meter (Maksimal: ' + response.max_distance + ' meter)</small>';
+                        locationText.innerHTML = '<i class="fas fa-times-circle"></i> Di luar radius kantor! Jarak: ' + response.distance + ' meter';
                         submitBtn.disabled = true;
                     }
                 } else {
                     locationStatus.className = 'alert alert-danger';
-                    locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal validasi lokasi. Silakan coba lagi.';
+                    locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal validasi lokasi.';
                     submitBtn.disabled = true;
                 }
-
-                // Reset tombol
                 getLocationBtn.disabled = false;
                 getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Lagi';
             }).fail(function() {
                 locationStatus.className = 'alert alert-danger';
-                locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal koneksi ke server. Periksa koneksi internet.';
+                locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal koneksi.';
                 submitBtn.disabled = true;
                 getLocationBtn.disabled = false;
                 getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Lagi';
             });
         },
         function(error) {
-            let errorMessage = '';
-            switch(error.code) {
-                case 1:
-                    errorMessage = 'Anda menolak akses lokasi. Silakan izinkan akses lokasi di browser.';
-                    break;
-                case 2:
-                    errorMessage = 'Tidak dapat mendeteksi lokasi. Pastikan GPS aktif dan sinyal cukup kuat.';
-                    break;
-                case 3:
-                    errorMessage = 'Timeout. Coba lagi dan pastikan koneksi stabil.';
-                    break;
-                default:
-                    errorMessage = error.message || 'Gagal mendapatkan lokasi.';
-            }
-
             locationStatus.style.display = 'block';
             locationStatus.className = 'alert alert-danger';
-            locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + errorMessage;
+            locationText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Gagal mendapatkan lokasi.';
             submitBtn.disabled = true;
-
             getLocationBtn.disabled = false;
             getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Lagi';
         },
-        {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-        }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
 }
 
-// Reset modal check in saat ditutup
+// Reset modal saat ditutup
 $('#checkInModal').on('hidden.bs.modal', function() {
     document.getElementById('locationStatus').style.display = 'none';
     document.getElementById('checkInLatitude').value = '';
     document.getElementById('checkInLongitude').value = '';
     document.getElementById('submitCheckIn').disabled = true;
-    const getLocationBtn = document.getElementById('getLocationBtn');
-    if (getLocationBtn) {
-        getLocationBtn.disabled = false;
-        getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Saat Ini';
-    }
+    const btn = document.getElementById('getLocationBtn');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Saat Ini'; }
 });
 
-// Reset modal check out saat ditutup
 $('#checkOutModal').on('hidden.bs.modal', function() {
     document.getElementById('locationStatusOut').style.display = 'none';
     document.getElementById('checkOutLatitude').value = '';
     document.getElementById('checkOutLongitude').value = '';
     document.getElementById('submitCheckOut').disabled = true;
-    const getLocationBtn = document.getElementById('getLocationOutBtn');
-    if (getLocationBtn) {
-        getLocationBtn.disabled = false;
-        getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Saat Ini';
-    }
+    const btn = document.getElementById('getLocationOutBtn');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Ambil Lokasi Saat Ini'; }
 });
 
 function showPhoto(url, title) {

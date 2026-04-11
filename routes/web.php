@@ -425,3 +425,13 @@ Route::middleware(['role:admin'])->prefix('admin')->name('admin.')->group(functi
     Route::put('/schedules/{day}', [WorkScheduleController::class, 'update'])->name('schedules.update');
     Route::post('/schedules/reset', [WorkScheduleController::class, 'reset'])->name('schedules.reset'); // POST method
 });
+
+Route::middleware(['role:admin'])->prefix('admin')->name('admin.')->group(function () {
+    // ... routes lain ...
+
+    // Work Schedules
+    Route::get('/schedules', [WorkScheduleController::class, 'index'])->name('schedules.index');
+    Route::get('/schedules/{day}/edit', [WorkScheduleController::class, 'edit'])->name('schedules.edit');
+    Route::put('/schedules/{day}', [WorkScheduleController::class, 'update'])->name('schedules.update');
+    Route::post('/schedules/reset', [WorkScheduleController::class, 'reset'])->name('schedules.reset'); // HANYA POST
+});

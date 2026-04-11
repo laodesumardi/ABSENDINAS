@@ -48,9 +48,11 @@ class WorkSchedule extends Model
             return 'Libur';
         }
 
-        $start = $this->check_in_start ? date('H:i', strtotime($this->check_in_start)) : '00:00';
-        $end = $this->check_in_end ? date('H:i', strtotime($this->check_in_end)) : '00:00';
-        return $start . ' - ' . $end;
+        if (!$this->check_in_start) {
+            return 'Belum diatur';
+        }
+
+        return 'Mulai jam ' . date('H:i', strtotime($this->check_in_start));
     }
 
     public function getCheckOutWindowAttribute()
@@ -59,9 +61,19 @@ class WorkSchedule extends Model
             return 'Libur';
         }
 
-        $start = $this->check_out_start ? date('H:i', strtotime($this->check_out_start)) : '00:00';
-        $end = $this->check_out_end ? date('H:i', strtotime($this->check_out_end)) : '00:00';
-        return $start . ' - ' . $end;
+        if (!$this->check_out_start) {
+            return 'Belum diatur';
+        }
+
+        return 'Mulai jam ' . date('H:i', strtotime($this->check_out_start));
+    }
+
+    public function getLateThresholdAttribute()
+    {
+        if (!$this->is_working_day || !$this->check_in_end) {
+            return null;
+        }
+        return date('H:i', strtotime($this->check_in_end));
     }
 
     public function getWorkingHoursAttribute()
@@ -70,30 +82,30 @@ class WorkSchedule extends Model
             return 'Libur';
         }
 
-        if (!$this->check_in_start || !$this->check_out_end) {
+        if (!$this->check_in_start || !$this->check_out_start) {
             return '-';
         }
 
         $start = Carbon::parse($this->check_in_start);
-        $end = Carbon::parse($this->check_out_end);
+        $end = Carbon::parse($this->check_out_start);
         $diff = $start->diff($end);
         return $diff->format('%h jam %i menit');
+    }
+
+    public function getStatusBadgeAttribute()
+    {
+        return $this->is_working_day ? 'success' : 'secondary';
+    }
+
+    public function getStatusTextAttribute()
+    {
+        return $this->is_working_day ? 'Hari Kerja' : 'Libur';
     }
 
     public static function getTodaySchedule()
     {
         $today = strtolower(now()->format('l'));
         $schedule = self::where('day_of_week', $today)->first();
-
-        // Jika tidak ada schedule, buat default
-        if (!$schedule) {
-            $schedule = new self();
-            $schedule->is_working_day = true;
-            $schedule->check_in_start = '08:00:00';
-            $schedule->check_in_end = '16:00:00';
-            $schedule->check_out_start = '17:00:00';
-            $schedule->check_out_end = '18:00:00';
-        }
 
         return $schedule;
     }
