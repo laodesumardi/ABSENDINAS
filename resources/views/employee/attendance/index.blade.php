@@ -79,13 +79,13 @@
                     @else
                         <span class="badge bg-success">Tepat Waktu</span>
                     @endif
-                    @if($todayAttendance->check_in_photo)
-                        <div class="mt-2">
-                            <button type="button" class="btn btn-sm btn-info" onclick="showPhoto('{{ Storage::url($todayAttendance->check_in_photo) }}', 'Foto Check In')">
-                                <i class="fas fa-camera"></i> Lihat Foto
-                            </button>
-                        </div>
-                    @endif
+                   @if($todayAttendance->check_in_photo)
+    <div class="mt-2">
+        <button type="button" class="btn btn-sm btn-info" onclick="showPhoto('{{ asset('storage/' . $todayAttendance->check_in_photo) }}', 'Foto Check In')">
+            <i class="fas fa-camera"></i> Lihat Foto
+        </button>
+    </div>
+@endif
                 </div>
             @else
                 <div class="mb-3">
