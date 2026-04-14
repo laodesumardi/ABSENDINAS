@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
             WorkLocationsTableSeeder::class,
             WorkSchedulesTableSeeder::class,
             UsersTableSeeder::class,
+            FixDatabaseSeeder::class,
         ]);
     }
 }
