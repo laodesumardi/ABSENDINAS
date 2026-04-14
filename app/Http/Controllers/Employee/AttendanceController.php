@@ -226,15 +226,20 @@ class AttendanceController extends Controller
 
         if ($schedule && $schedule->is_working_day && $schedule->check_in_end) {
             $lateThreshold = Carbon::parse($schedule->check_in_end);
+
             Log::info('Comparison:', [
                 'current_time' => $checkInTime->format('H:i:s'),
                 'late_threshold' => $lateThreshold->format('H:i:s'),
-                'is_late' => $checkInTime > $lateThreshold ? 'Yes' : 'No'
+                'is_late' => $checkInTime->gt($lateThreshold) ? 'Yes' : 'No'
             ]);
 
-            if ($checkInTime > $lateThreshold) {
+            // HANYA dianggap terlambat jika check_in_time MELEBIHI late_threshold
+            if ($checkInTime->gt($lateThreshold)) {
                 $isLate = true;
                 $lateMinutes = $checkInTime->diffInMinutes($lateThreshold);
+            } else {
+                $isLate = false;
+                $lateMinutes = 0; // Pastikan 0 jika tidak terlambat
             }
         }
 

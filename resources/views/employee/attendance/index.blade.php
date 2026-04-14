@@ -58,102 +58,109 @@
     </div>
 </div>
 
-    <!-- Attendance Cards -->
-    <div class="mt-4 row">
-        <!-- Check In Card -->
-        <div class="col-md-6">
-            <div class="text-center stat-card">
-                @if(isset($todayAttendance) && $todayAttendance && $todayAttendance->check_in_time)
-                    <div class="mb-3">
-                        <div class="mx-auto mb-3 stat-icon success" style="width: 80px; height: 80px; font-size: 2.5rem;">
-                            <i class="fas fa-check-circle"></i>
-                        </div>
-                        <h5>Check In</h5>
-                        <h2 class="text-success">{{ \Carbon\Carbon::parse($todayAttendance->check_in_time)->format('H:i:s') }}</h2>
-                        @if($todayAttendance->late_minutes > 0)
-                            <span class="badge bg-warning">Terlambat {{ $todayAttendance->late_minutes }} menit</span>
-                        @else
-                            <span class="badge bg-success">Tepat Waktu</span>
-                        @endif
-                        @if($todayAttendance->check_in_photo)
-                            <div class="mt-2">
-                                <button type="button" class="btn btn-sm btn-info" onclick="showPhoto('{{ Storage::url($todayAttendance->check_in_photo) }}', 'Foto Check In')">
-                                    <i class="fas fa-camera"></i> Lihat Foto
-                                </button>
-                            </div>
-                        @endif
+ <!-- Attendance Cards -->
+<div class="mt-4 row">
+    <!-- Check In Card -->
+    <div class="col-md-6">
+        <div class="text-center stat-card">
+            @if(isset($todayAttendance) && $todayAttendance && $todayAttendance->check_in_time)
+                <div class="mb-3">
+                    <div class="mx-auto mb-3 stat-icon" style="width: 80px; height: 80px; font-size: 2.5rem; background: {{ $todayAttendance->status == 'late' ? 'linear-gradient(135deg, #ffc107, #e6b800)' : 'linear-gradient(135deg, #06d6a0, #05a07a)' }};">
+                        <i class="fas {{ $todayAttendance->status == 'late' ? 'fa-clock' : 'fa-check-circle' }}"></i>
                     </div>
-                @else
-                    <div class="mb-3">
-                        <div class="mx-auto mb-3 stat-icon primary" style="width: 80px; height: 80px; font-size: 2.5rem;">
-                            <i class="fas fa-fingerprint"></i>
-                        </div>
-                        <h5>Check In</h5>
-                        @if(isset($canCheckIn) && $canCheckIn && (!isset($isHoliday) || !$isHoliday))
-                            <p class="text-muted">Silakan lakukan check in</p>
-                            <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#checkInModal">
-                                <i class="fas fa-sign-in-alt"></i> Check In Sekarang
+                    <h5>Check In</h5>
+                    <h2 class="{{ $todayAttendance->status == 'late' ? 'text-warning' : 'text-success' }}">
+                        {{ \Carbon\Carbon::parse($todayAttendance->check_in_time)->format('H:i:s') }}
+                    </h2>
+                    @if($todayAttendance->status == 'late' && $todayAttendance->late_minutes > 0)
+                        <span class="badge bg-warning">Terlambat {{ $todayAttendance->late_minutes }} menit</span>
+                    @elseif($todayAttendance->status == 'late')
+                        <span class="badge bg-warning">Terlambat</span>
+                    @else
+                        <span class="badge bg-success">Tepat Waktu</span>
+                    @endif
+                    @if($todayAttendance->check_in_photo)
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-info" onclick="showPhoto('{{ Storage::url($todayAttendance->check_in_photo) }}', 'Foto Check In')">
+                                <i class="fas fa-camera"></i> Lihat Foto
                             </button>
-                        @elseif(isset($isHoliday) && $isHoliday)
-                            <p class="text-muted">Hari libur, tidak perlu check in</p>
-                        @else
-                            <p class="text-muted">Belum waktunya check in atau sudah melewati batas waktu</p>
-                            <small class="text-muted">Waktu check in: {{ $checkInWindow ?? 'Belum diatur' }}</small>
-                        @endif
-                    </div>
-                @endif
-            </div>
-        </div>
-
-        <!-- Check Out Card -->
-        <div class="col-md-6">
-            <div class="text-center stat-card">
-                @if(isset($todayAttendance) && $todayAttendance && $todayAttendance->check_out_time)
-                    <div class="mb-3">
-                        <div class="mx-auto mb-3 stat-icon info" style="width: 80px; height: 80px; font-size: 2.5rem;">
-                            <i class="fas fa-check-double"></i>
                         </div>
-                        <h5>Check Out</h5>
-                        <h2 class="text-info">{{ \Carbon\Carbon::parse($todayAttendance->check_out_time)->format('H:i:s') }}</h2>
-                        @if($todayAttendance->early_checkout_minutes > 0)
-                            <span class="badge bg-warning">Pulang awal {{ $todayAttendance->early_checkout_minutes }} menit</span>
-                        @endif
-                        @if($todayAttendance->check_out_photo)
-                            <div class="mt-2">
-                                <button type="button" class="btn btn-sm btn-info" onclick="showPhoto('{{ Storage::url($todayAttendance->check_out_photo) }}', 'Foto Check Out')">
-                                    <i class="fas fa-camera"></i> Lihat Foto
-                                </button>
-                            </div>
-                        @endif
+                    @endif
+                </div>
+            @else
+                <div class="mb-3">
+                    <div class="mx-auto mb-3 stat-icon primary" style="width: 80px; height: 80px; font-size: 2.5rem;">
+                        <i class="fas fa-fingerprint"></i>
                     </div>
-                @elseif(isset($todayAttendance) && $todayAttendance && $todayAttendance->check_in_time && !$todayAttendance->check_out_time)
-                    <div class="mb-3">
-                        <div class="mx-auto mb-3 stat-icon warning" style="width: 80px; height: 80px; font-size: 2.5rem;">
-                            <i class="fas fa-sign-out-alt"></i>
-                        </div>
-                        <h5>Check Out</h5>
-                        @if(isset($canCheckOut) && $canCheckOut && (!isset($isHoliday) || !$isHoliday))
-                            <p class="text-muted">Silakan lakukan check out</p>
-                            <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#checkOutModal">
-                                <i class="fas fa-sign-out-alt"></i> Check Out Sekarang
-                            </button>
-                        @else
-                            <p class="text-muted">Belum waktunya check out</p>
-                            <small class="text-muted">Waktu check out: {{ $checkOutWindow ?? 'Belum diatur' }}</small>
-                        @endif
-                    </div>
-                @else
-                    <div class="mb-3">
-                        <div class="mx-auto mb-3 stat-icon secondary" style="width: 80px; height: 80px; font-size: 2.5rem;">
-                            <i class="fas fa-clock"></i>
-                        </div>
-                        <h5>Check Out</h5>
-                        <p class="text-muted">Silakan check in terlebih dahulu</p>
-                    </div>
-                @endif
-            </div>
+                    <h5>Check In</h5>
+                    @if(isset($canCheckIn) && $canCheckIn && (!isset($isHoliday) || !$isHoliday))
+                        <p class="text-muted">Silakan lakukan check in</p>
+                        <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#checkInModal">
+                            <i class="fas fa-sign-in-alt"></i> Check In Sekarang
+                        </button>
+                    @elseif(isset($isHoliday) && $isHoliday)
+                        <p class="text-muted">Hari libur, tidak perlu check in</p>
+                    @else
+                        <p class="text-muted">Belum waktunya check in atau sudah melewati batas waktu</p>
+                        <small class="text-muted">Waktu check in: {{ $checkInWindow ?? 'Belum diatur' }}</small>
+                    @endif
+                </div>
+            @endif
         </div>
     </div>
+
+
+    <!-- Check Out Card -->
+    <div class="col-md-6">
+        <div class="text-center stat-card">
+            @if(isset($todayAttendance) && $todayAttendance && $todayAttendance->check_out_time)
+                <div class="mb-3">
+                    <div class="mx-auto mb-3 stat-icon" style="width: 80px; height: 80px; font-size: 2.5rem; background: linear-gradient(135deg, #118ab2, #0e6d8a);">
+                        <i class="fas fa-check-double"></i>
+                    </div>
+                    <h5>Check Out</h5>
+                    <h2 class="text-info">
+                        {{ \Carbon\Carbon::parse($todayAttendance->check_out_time)->format('H:i:s') }}
+                    </h2>
+                    @if($todayAttendance->early_checkout_minutes > 0)
+                        <span class="badge bg-warning">Pulang awal {{ $todayAttendance->early_checkout_minutes }} menit</span>
+                    @endif
+                    @if($todayAttendance->check_out_photo)
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-info" onclick="showPhoto('{{ Storage::url($todayAttendance->check_out_photo) }}', 'Foto Check Out')">
+                                <i class="fas fa-camera"></i> Lihat Foto
+                            </button>
+                        </div>
+                    @endif
+                </div>
+            @elseif(isset($todayAttendance) && $todayAttendance && $todayAttendance->check_in_time && !$todayAttendance->check_out_time)
+                <div class="mb-3">
+                    <div class="mx-auto mb-3 stat-icon warning" style="width: 80px; height: 80px; font-size: 2.5rem;">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </div>
+                    <h5>Check Out</h5>
+                    @if(isset($canCheckOut) && $canCheckOut && (!isset($isHoliday) || !$isHoliday))
+                        <p class="text-muted">Silakan lakukan check out</p>
+                        <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#checkOutModal">
+                            <i class="fas fa-sign-out-alt"></i> Check Out Sekarang
+                        </button>
+                    @else
+                        <p class="text-muted">Belum waktunya check out</p>
+                        <small class="text-muted">Waktu check out: {{ $checkOutWindow ?? 'Belum diatur' }}</small>
+                    @endif
+                </div>
+            @else
+                <div class="mb-3">
+                    <div class="mx-auto mb-3 stat-icon secondary" style="width: 80px; height: 80px; font-size: 2.5rem;">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <h5>Check Out</h5>
+                    <p class="text-muted">Silakan check in terlebih dahulu</p>
+                </div>
+            @endif
+        </div>
+    </div>
+</div>
 
     <!-- Monthly Statistics -->
     <div class="mt-4 row">
