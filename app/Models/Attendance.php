@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class Attendance extends Model
 {
@@ -34,10 +35,6 @@ class Attendance extends Model
         'attendance_date' => 'date',
         'check_in_time' => 'datetime:H:i:s',
         'check_out_time' => 'datetime:H:i:s',
-        'check_in_latitude' => 'decimal:8',
-        'check_in_longitude' => 'decimal:8',
-        'check_out_latitude' => 'decimal:8',
-        'check_out_longitude' => 'decimal:8',
         'late_minutes' => 'integer',
         'early_checkout_minutes' => 'integer',
         'approved_at' => 'datetime',
@@ -56,6 +53,50 @@ class Attendance extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    // Accessors untuk URL Foto
+    public function getCheckInPhotoUrlAttribute()
+    {
+        return $this->getPhotoUrl($this->check_in_photo);
+    }
+
+    public function getCheckOutPhotoUrlAttribute()
+    {
+        return $this->getPhotoUrl($this->check_out_photo);
+    }
+
+    public function getCheckInPhotoThumbAttribute()
+    {
+        return $this->getPhotoUrl($this->check_in_photo, true);
+    }
+
+    public function getCheckOutPhotoThumbAttribute()
+    {
+        return $this->getPhotoUrl($this->check_out_photo, true);
+    }
+
+    private function getPhotoUrl($path, $thumb = false)
+    {
+        if (!$path) {
+            return null;
+        }
+
+        // Jika sudah URL lengkap
+        if (filter_var($path, FILTER_VALIDATE_URL)) {
+            return $path;
+        }
+
+        // Hapus prefix 'storage/' jika ada
+        $cleanPath = preg_replace('/^storage\//', '', $path);
+
+        // Untuk environment production (hosting)
+        if (app()->environment('production')) {
+            return url('storage/' . $cleanPath);
+        }
+
+        // Untuk localhost
+        return asset('storage/' . $cleanPath);
+    }
+
     // Scopes
     public function scopeToday($query)
     {
@@ -65,11 +106,6 @@ class Attendance extends Model
     public function scopeByDate($query, $date)
     {
         return $query->whereDate('attendance_date', $date);
-    }
-
-    public function scopeByDateRange($query, $startDate, $endDate)
-    {
-        return $query->whereBetween('attendance_date', [$startDate, $endDate]);
     }
 
     public function scopeByStatus($query, $status)
@@ -114,22 +150,5 @@ class Attendance extends Model
         ];
 
         return $badges[$this->status] ?? 'secondary';
-    }
-
-    // Mutators
-    public function setCheckInTimeAttribute($value)
-    {
-        $this->attributes['check_in_time'] = $value;
-
-        // Auto-calculate late minutes if check_in_end is defined
-        if ($this->attendance_date) {
-            $schedule = WorkSchedule::where('day_of_week', strtolower($this->attendance_date->format('l')))->first();
-            if ($schedule && $value > $schedule->check_in_end) {
-                $lateMinutes = now()->setTimeFromTimeString($value)
-                    ->diffInMinutes(now()->setTimeFromTimeString($schedule->check_in_end));
-                $this->attributes['late_minutes'] = $lateMinutes;
-                $this->attributes['status'] = $lateMinutes > 0 ? 'late' : 'present';
-            }
-        }
     }
 }

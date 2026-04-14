@@ -452,3 +452,15 @@ Route::get('/create-storage-link', function () {
 
     return "Gagal membuat symlink. Silakan buat manual.";
 });
+
+
+
+Route::get('/photos/attendance/{filename}', [App\Http\Controllers\Employee\AttendanceController::class, 'getPhoto'])->name('photo.attendance');
+Route::get('/photos/attendance/thumb/{filename}', [App\Http\Controllers\Employee\AttendanceController::class, 'getPhotoThumb'])->name('photo.attendance.thumb');
+
+
+Route::fallback(function () {
+    if (request()->path() === 'storage/attendance-photos') {
+        return response()->file(public_path('images/no-image.jpg'));
+    }
+});

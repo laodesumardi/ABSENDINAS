@@ -58,32 +58,69 @@
     </div>
 </div>
 
- <!-- Attendance Cards -->
-<div class="mt-4 row">
-    <!-- Check In Card -->
-    <div class="col-md-6">
-        <div class="text-center stat-card">
-            @if(isset($todayAttendance) && $todayAttendance && $todayAttendance->check_in_time)
-                <div class="mb-3">
-                    <div class="mx-auto mb-3 stat-icon" style="width: 80px; height: 80px; font-size: 2.5rem; background: {{ $todayAttendance->status == 'late' ? 'linear-gradient(135deg, #ffc107, #e6b800)' : 'linear-gradient(135deg, #06d6a0, #05a07a)' }};">
-                        <i class="fas {{ $todayAttendance->status == 'late' ? 'fa-clock' : 'fa-check-circle' }}"></i>
-                    </div>
-                    <h5>Check In</h5>
-                    <h2 class="{{ $todayAttendance->status == 'late' ? 'text-warning' : 'text-success' }}">
-                        {{ \Carbon\Carbon::parse($todayAttendance->check_in_time)->format('H:i:s') }}
-                    </h2>
-                    @if($todayAttendance->status == 'late' && $todayAttendance->late_minutes > 0)
-                        <span class="badge bg-warning">Terlambat {{ $todayAttendance->late_minutes }} menit</span>
-                    @elseif($todayAttendance->status == 'late')
-                        <span class="badge bg-warning">Terlambat</span>
-                    @else
-                        <span class="badge bg-success">Tepat Waktu</span>
-                    @endif
-                   @if($todayAttendance->check_in_photo)
-    <div class="mt-2">
-        <button type="button" class="btn btn-sm btn-info" onclick="showPhoto('{{ asset('storage/' . $todayAttendance->check_in_photo) }}', 'Foto Check In')">
-            <i class="fas fa-camera"></i> Lihat Foto
-        </button>
+ <!-- Check In Card -->
+@if($todayAttendance && $todayAttendance->check_in_time)
+    <div class="mb-3">
+        <div class="mx-auto mb-3 stat-icon" style="width: 80px; height: 80px; font-size: 2.5rem; background: {{ $todayAttendance->status == 'late' ? 'linear-gradient(135deg, #ffc107, #e6b800)' : 'linear-gradient(135deg, #06d6a0, #05a07a)' }};">
+            <i class="fas {{ $todayAttendance->status == 'late' ? 'fa-clock' : 'fa-check-circle' }}"></i>
+        </div>
+        <h5>Check In</h5>
+        <h2 class="{{ $todayAttendance->status == 'late' ? 'text-warning' : 'text-success' }}">
+            {{ \Carbon\Carbon::parse($todayAttendance->check_in_time)->format('H:i:s') }}
+        </h2>
+        @if($todayAttendance->status == 'late' && $todayAttendance->late_minutes > 0)
+            <span class="badge bg-warning">Terlambat {{ $todayAttendance->late_minutes }} menit</span>
+        @elseif($todayAttendance->status == 'late')
+            <span class="badge bg-warning">Terlambat</span>
+        @else
+            <span class="badge bg-success">Tepat Waktu</span>
+        @endif
+
+        <!-- Tampilan Foto Check In -->
+        @if($todayAttendance->check_in_photo)
+            <div class="mt-3">
+                <img src="{{ $todayAttendance->check_in_photo_url }}"
+                     alt="Foto Check In"
+                     class="rounded img-fluid"
+                     style="max-width: 150px; cursor: pointer;"
+                     onclick="showPhoto('{{ $todayAttendance->check_in_photo_url }}', 'Foto Check In - {{ $todayAttendance->attendance_date->format('d/m/Y') }}')">
+                <br>
+                <button type="button" class="mt-2 btn btn-sm btn-info" onclick="showPhoto('{{ $todayAttendance->check_in_photo_url }}', 'Foto Check In')">
+                    <i class="fas fa-camera"></i> Lihat Foto
+                </button>
+            </div>
+        @endif
+    </div>
+@endif
+
+<!-- Check Out Card -->
+@if($todayAttendance && $todayAttendance->check_out_time)
+    <div class="mb-3">
+        <div class="mx-auto mb-3 stat-icon" style="width: 80px; height: 80px; font-size: 2.5rem; background: linear-gradient(135deg, #118ab2, #0e6d8a);">
+            <i class="fas fa-check-double"></i>
+        </div>
+        <h5>Check Out</h5>
+        <h2 class="text-info">
+            {{ \Carbon\Carbon::parse($todayAttendance->check_out_time)->format('H:i:s') }}
+        </h2>
+        @if($todayAttendance->early_checkout_minutes > 0)
+            <span class="badge bg-warning">Pulang awal {{ $todayAttendance->early_checkout_minutes }} menit</span>
+        @endif
+
+        <!-- Tampilan Foto Check Out -->
+        @if($todayAttendance->check_out_photo)
+            <div class="mt-3">
+                <img src="{{ $todayAttendance->check_out_photo_url }}"
+                     alt="Foto Check Out"
+                     class="rounded img-fluid"
+                     style="max-width: 150px; cursor: pointer;"
+                     onclick="showPhoto('{{ $todayAttendance->check_out_photo_url }}', 'Foto Check Out - {{ $todayAttendance->attendance_date->format('d/m/Y') }}')">
+                <br>
+                <button type="button" class="mt-2 btn btn-sm btn-info" onclick="showPhoto('{{ $todayAttendance->check_out_photo_url }}', 'Foto Check Out')">
+                    <i class="fas fa-camera"></i> Lihat Foto
+                </button>
+            </div>
+        @endif
     </div>
 @endif
                 </div>

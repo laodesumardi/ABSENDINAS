@@ -568,4 +568,35 @@ class AttendanceController extends Controller
 
         return response()->json(['html' => $html]);
     }
+
+
+
+    /**
+     * Get photo file
+     */
+    public function getPhoto($filename)
+    {
+        $path = storage_path('app/public/attendance-photos/' . $filename);
+
+        if (!file_exists($path)) {
+            abort(404);
+        }
+
+        return response()->file($path);
+    }
+
+    /**
+     * Get photo thumbnail
+     */
+    public function getPhotoThumb($filename)
+    {
+        $path = storage_path('app/public/attendance-photos/' . $filename);
+
+        if (!file_exists($path)) {
+            abort(404);
+        }
+
+        // Buat thumbnail jika perlu
+        return response()->file($path);
+    }
 }
