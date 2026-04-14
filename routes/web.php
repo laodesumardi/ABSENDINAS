@@ -435,3 +435,20 @@ Route::middleware(['role:admin'])->prefix('admin')->name('admin.')->group(functi
     Route::put('/schedules/{day}', [WorkScheduleController::class, 'update'])->name('schedules.update');
     Route::post('/schedules/reset', [WorkScheduleController::class, 'reset'])->name('schedules.reset'); // HANYA POST
 });
+
+
+
+Route::get('/create-storage-link', function () {
+    $target = storage_path('app/public');
+    $link = public_path('storage');
+
+    if (file_exists($link)) {
+        return "Symlink sudah ada!";
+    }
+
+    if (symlink($target, $link)) {
+        return "Symlink berhasil dibuat!";
+    }
+
+    return "Gagal membuat symlink. Silakan buat manual.";
+});
